@@ -1,0 +1,257 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriveWise | Customer Management</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="dashboard">
+
+    <aside class="sidebar">
+        <h2 class="logo">Drive<span>Wise</span></h2>
+        <p class="sidebar-label">MAIN MENU</p>
+
+        <nav class="sidebar-nav">
+                <a href="admin_dashboard.html" class="nav-link">
+                    Dashboard
+                </a>
+                <a href="admin_vehicles.html" class="nav-link">
+                    Vehicles
+                </a>
+                <a href="admin-bookings.html" class="nav-link">
+                    Bookings
+                </a>
+                <a href="admin-customer.html" class="nav-link active">
+                    Customers
+                </a>
+                <a href="admin-reports.html" class="nav-link">
+                    Reports
+                </a>
+                <a href="admin-settings.html" class="nav-link">
+                    Settings
+                </a>
+            </nav>
+
+        <div class="sidebar-footer">
+            <p>DriveWise Admin</p>
+            <small>Vehicle Rental Management</small>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <div>
+                <h1>Customer Management</h1>
+                <p>Manage customer accounts and contact details.</p>
+            </div>
+
+            <div class="admin-profile">
+                <div class="profile-avatar">A</div>
+                <div>
+                    <strong>Administrator</strong>
+                    <small>Super Admin</small>
+                </div>
+            </div>
+        </header>
+
+        <section class="dashboard-content">
+
+            <div class="vehicle-page-heading">
+                <div>
+                    <h2>All Customers</h2>
+                    <p>View and manage registered customers.</p>
+                </div>
+                <button class="add-vehicle-btn" id="openCustomerForm"
+                        type="button">+ Add Customer</button>
+            </div>
+
+            <div class="stats-grid">
+                <article class="stat-card">
+                    <p>Total Customers</p>
+                    <h3 id="totalCustomers">5</h3>
+                    <span class="stat-note">Registered accounts</span>
+                </article>
+                <article class="stat-card">
+                    <p>Active</p>
+                    <h3 id="activeCustomers">4</h3>
+                    <span class="stat-note">Active accounts</span>
+                </article>
+                <article class="stat-card">
+                    <p>Inactive</p>
+                    <h3 id="inactiveCustomers">1</h3>
+                    <span class="stat-note">Inactive accounts</span>
+                </article>
+                <article class="stat-card">
+                    <p>Verified Emails</p>
+                    <h3 id="verifiedCustomers">3</h3>
+                    <span class="stat-note">Email verified</span>
+                </article>
+            </div>
+
+            <section class="panel">
+                <div class="vehicle-toolbar">
+                    <input type="search" id="customerSearch"
+                           class="vehicle-search"
+                           placeholder="Search name, email, phone or ID..."
+                           aria-label="Search customers">
+
+                    <select id="customerStatusFilter"
+                            aria-label="Filter customers by status">
+                        <option value="">All Account Statuses</option>
+                        <option>Active</option>
+                        <option>Inactive</option>
+                    </select>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Customer ID</th>
+                                <th>Customer Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>License Number</th>
+                                <th>Email Verified</th>
+                                <th>Account Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="customerTableBody">
+                            <tr>
+                                <td>CUS1001</td>
+                                <td>Aarav Sharma</td>
+                                <td>aarav@example.com</td>
+                                <td>9876543210</td>
+                                <td>HR0120260001</td>
+                                <td>Yes</td>
+                                <td><span class="status customer-active">Active</span></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>CUS1002</td>
+                                <td>Priya Verma</td>
+                                <td>priya@example.com</td>
+                                <td>9876543211</td>
+                                <td>DL0420260002</td>
+                                <td>Yes</td>
+                                <td><span class="status customer-active">Active</span></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>CUS1003</td>
+                                <td>Rohan Mehta</td>
+                                <td>rohan@example.com</td>
+                                <td>9876543212</td>
+                                <td>HR0620260003</td>
+                                <td>No</td>
+                                <td><span class="status customer-active">Active</span></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>CUS1004</td>
+                                <td>Ananya Singh</td>
+                                <td>ananya@example.com</td>
+                                <td>9876543213</td>
+                                <td>DL0820260004</td>
+                                <td>Yes</td>
+                                <td><span class="status customer-inactive">Inactive</span></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>CUS1005</td>
+                                <td>Kabir Gupta</td>
+                                <td>kabir@example.com</td>
+                                <td>9876543214</td>
+                                <td>HR1020260005</td>
+                                <td>No</td>
+                                <td><span class="status customer-active">Active</span></td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel vehicle-form-panel" id="customerFormPanel" hidden>
+                <div class="panel-heading">
+                    <div>
+                        <h2 id="customerFormTitle">Add New Customer</h2>
+                        <p>Enter the customer's details.</p>
+                    </div>
+                    <button type="button" class="action-btn"
+                            id="closeCustomerForm">Close</button>
+                </div>
+
+                <form id="customerForm">
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label for="customerId">Customer ID</label>
+                            <input id="customerId" required
+                                   placeholder="e.g. CUS1006">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="customerName">Full Name</label>
+                            <input id="customerName" required
+                                   placeholder="Customer name">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="customerEmail">Email</label>
+                            <input type="email" id="customerEmail" required
+                                   placeholder="customer@example.com">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="customerPhone">Phone Number</label>
+                            <input type="tel" id="customerPhone"
+                                   pattern="[0-9]{10}" maxlength="10"
+                                   minlength="10" required
+                                   placeholder="10-digit phone number">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="customerLicense">License Number</label>
+                            <input id="customerLicense" required
+                                   placeholder="Driving license number">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="customerVerified">Email Verified</label>
+                            <select id="customerVerified" required>
+                                <option>Yes</option>
+                                <option>No</option>
+                            </select>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="customerStatus">Account Status</label>
+                            <select id="customerStatus" required>
+                                <option>Active</option>
+                                <option>Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="action-btn"
+                                id="cancelCustomerForm">Cancel</button>
+                        <button type="submit" class="add-vehicle-btn">
+                            Save Customer
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+        </section>
+    </main>
+</div>
+
+<script src="customer.js"></script>
+</body>
+</html>

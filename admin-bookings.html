@@ -1,0 +1,256 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriveWise | Booking Management</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="dashboard">
+
+    <aside class="sidebar">
+        <h2 class="logo">Drive<span>Wise</span></h2>
+        <p class="sidebar-label">MAIN MENU</p>
+
+        <nav class="sidebar-nav">
+                <a href="admin_dashboard.html" class="nav-link">
+                    Dashboard
+                </a>
+                <a href="admin_vehicles.html" class="nav-link">
+                    Vehicles
+                </a>
+                <a href="admin-bookings.html" class="nav-link active">
+                    Bookings
+                </a>
+                <a href="admin-customer.html" class="nav-link">
+                    Customers
+                </a>
+                <a href="admin-reports.html" class="nav-link">
+                    Reports
+                </a>
+                <a href="admin-settings.html" class="nav-link">
+                    Settings
+                </a>
+            </nav>
+
+        <div class="sidebar-footer">
+            <p>DriveWise Admin</p>
+            <small>Vehicle Rental Management</small>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <div>
+                <h1>Booking Management</h1>
+                <p>Manage reservations and rental activity.</p>
+            </div>
+
+            <div class="admin-profile">
+                <div class="profile-avatar">A</div>
+                <div>
+                    <strong>Administrator</strong>
+                    <small>Super Admin</small>
+                </div>
+            </div>
+        </header>
+
+        <section class="dashboard-content">
+
+            <div class="vehicle-page-heading">
+                <div>
+                    <h2>All Bookings</h2>
+                    <p>Track and manage customer reservations.</p>
+                </div>
+                <button class="add-vehicle-btn" id="openBookingForm"
+                        type="button">+ Add Booking</button>
+            </div>
+
+            <div class="stats-grid">
+                <article class="stat-card">
+                    <p>Total Bookings</p>
+                    <h3 id="totalBookings">5</h3>
+                    <span class="stat-note">All reservations</span>
+                </article>
+                <article class="stat-card">
+                    <p>Pending</p>
+                    <h3 id="pendingBookings">1</h3>
+                    <span class="stat-note">Awaiting confirmation</span>
+                </article>
+                <article class="stat-card">
+                    <p>Confirmed</p>
+                    <h3 id="confirmedBookings">2</h3>
+                    <span class="stat-note">Approved bookings</span>
+                </article>
+                <article class="stat-card">
+                    <p>Completed</p>
+                    <h3 id="completedBookings">1</h3>
+                    <span class="stat-note">Finished rentals</span>
+                </article>
+            </div>
+
+            <section class="panel">
+                <div class="vehicle-toolbar">
+                    <input type="search" id="bookingSearch"
+                           class="vehicle-search"
+                           placeholder="Search booking, customer or vehicle..."
+                           aria-label="Search bookings">
+
+                    <select id="bookingStatusFilter"
+                            aria-label="Filter bookings by status">
+                        <option value="">All Statuses</option>
+                        <option>Pending</option>
+                        <option>Confirmed</option>
+                        <option>Completed</option>
+                        <option>Cancelled</option>
+                    </select>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Customer</th>
+                                <th>Vehicle</th>
+                                <th>Pickup Date</th>
+                                <th>Return Date</th>
+                                <th>Total Amount</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bookingTableBody">
+                            <tr>
+                                <td>BK1001</td>
+                                <td>Aarav Sharma</td>
+                                <td>Hyundai Creta</td>
+                                <td>2026-11-02</td>
+                                <td>2026-11-04</td>
+                                <td>₹5,000</td>
+                                <td><span class="status confirmed">Confirmed</span></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>BK1002</td>
+                                <td>Priya Verma</td>
+                                <td>Honda City</td>
+                                <td>2026-11-05</td>
+                                <td>2026-11-06</td>
+                                <td>₹2,000</td>
+                                <td><span class="status pending">Pending</span></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>BK1003</td>
+                                <td>Rohan Mehta</td>
+                                <td>Maruti Swift</td>
+                                <td>2026-11-07</td>
+                                <td>2026-11-09</td>
+                                <td>₹4,500</td>
+                                <td><span class="status completed">Completed</span></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>BK1004</td>
+                                <td>Ananya Singh</td>
+                                <td>Maruti Baleno</td>
+                                <td>2026-11-12</td>
+                                <td>2026-11-14</td>
+                                <td>₹3,200</td>
+                                <td><span class="status confirmed">Confirmed</span></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>BK1005</td>
+                                <td>Kabir Gupta</td>
+                                <td>Royal Enfield Classic</td>
+                                <td>2026-11-15</td>
+                                <td>2026-11-16</td>
+                                <td>₹900</td>
+                                <td><span class="status cancelled">Cancelled</span></td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel vehicle-form-panel" id="bookingFormPanel" hidden>
+                <div class="panel-heading">
+                    <div>
+                        <h2 id="bookingFormTitle">Add New Booking</h2>
+                        <p>Enter the reservation details.</p>
+                    </div>
+                    <button type="button" class="action-btn"
+                            id="closeBookingForm">Close</button>
+                </div>
+
+                <form id="bookingForm">
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label for="bookingId">Booking ID</label>
+                            <input id="bookingId" required
+                                   placeholder="e.g. BK1006">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="bookingCustomer">Customer Name</label>
+                            <input id="bookingCustomer" required
+                                   placeholder="Customer name">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="bookingVehicle">Vehicle</label>
+                            <input id="bookingVehicle" required
+                                   placeholder="e.g. Hyundai Creta">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="pickupDate">Pickup Date</label>
+                            <input type="date" id="pickupDate" required>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="returnDate">Return Date</label>
+                            <input type="date" id="returnDate" required>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="bookingAmount">Total Amount (₹)</label>
+                            <input type="number" id="bookingAmount"
+                                   min="1" step="1" required
+                                   placeholder="e.g. 2500">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="bookingStatus">Status</label>
+                            <select id="bookingStatus" required>
+                                <option value="">Select status</option>
+                                <option>Pending</option>
+                                <option>Confirmed</option>
+                                <option>Completed</option>
+                                <option>Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="action-btn"
+                                id="cancelBookingForm">Cancel</button>
+                        <button type="submit" class="add-vehicle-btn">
+                            Save Booking
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+        </section>
+    </main>
+</div>
+
+<script src="bookings.js"></script>
+</body>
+</html>

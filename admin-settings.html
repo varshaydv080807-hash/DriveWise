@@ -1,0 +1,195 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriveWise | Settings</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="dashboard">
+
+    <aside class="sidebar">
+        <h2 class="logo">Drive<span>Wise</span></h2>
+        <p class="sidebar-label">MAIN MENU</p>
+
+        <nav class="sidebar-nav">
+                <a href="admin_dashboard.html" class="nav-link">
+                    Dashboard
+                </a>
+                <a href="admin_vehicles.html" class="nav-link">
+                    Vehicles
+                </a>
+                <a href="admin-bookings.html" class="nav-link">
+                    Bookings
+                </a>
+                <a href="admin-customer.html" class="nav-link">
+                    Customers
+                </a>
+                <a href="admin-reports.html" class="nav-link">
+                    Reports
+                </a>
+                <a href="admin-settings.html" class="nav-link active">
+                    Settings
+                </a>
+            </nav>
+
+        <div class="sidebar-footer">
+            <p>DriveWise Admin</p>
+            <small>Vehicle Rental Management</small>
+        </div>
+    </aside>
+
+    <main class="main-content">
+
+        <header class="topbar">
+            <div>
+                <h1>Settings</h1>
+                <p>Manage your DriveWise preferences.</p>
+            </div>
+            <span class="admin-badge">Administrator</span>
+        </header>
+
+        <section class="dashboard-content">
+
+            <section class="panel settings-panel">
+                <h2>Admin Profile</h2>
+                <p class="settings-description">
+                    Update the administrator's contact information.
+                </p>
+
+                <form id="profile-form">
+                    <div class="settings-form-grid">
+                        <div class="settings-field">
+                            <label for="admin-name">Full Name</label>
+                            <input type="text" id="admin-name"
+                                   value="DriveWise Admin" required>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="admin-email">Email Address</label>
+                            <input type="email" id="admin-email"
+                                   value="admin@drivewise.com" required>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="admin-phone">Phone Number</label>
+                            <input type="tel" id="admin-phone"
+                                   placeholder="Enter phone number">
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="currency">Currency</label>
+                            <select id="currency">
+                                <option value="INR">Indian Rupee (INR)</option>
+                                <option value="USD">US Dollar (USD)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="report-btn">
+                        Save Profile
+                    </button>
+                </form>
+            </section>
+
+            <section class="panel settings-panel">
+                <h2>Rental Preferences</h2>
+                <p class="settings-description">
+                    Configure default rental and booking preferences.
+                </p>
+
+                <form id="rental-form">
+                    <div class="settings-form-grid">
+                        <div class="settings-field">
+                            <label for="min-days">Minimum Rental Duration (days)</label>
+                            <input type="number" id="min-days"
+                                   min="1" max="30" value="1" required>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="max-days">Maximum Rental Duration (days)</label>
+                            <input type="number" id="max-days"
+                                   min="1" max="365" value="30" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="report-btn">
+                        Save Rental Preferences
+                    </button>
+                </form>
+            </section>
+
+            <section class="panel settings-panel">
+                <h2>Notifications</h2>
+                <p class="settings-description">
+                    Choose which notifications you want enabled.
+                </p>
+
+                <label class="setting-toggle">
+                    <span>
+                        <strong>Email Notifications</strong>
+                        <small>Receive updates about rental activity.</small>
+                    </span>
+                    <input type="checkbox" id="email-notifications" checked>
+                </label>
+
+                <label class="setting-toggle">
+                    <span>
+                        <strong>Booking Notifications</strong>
+                        <small>Enable alerts for new bookings and status changes.</small>
+                    </span>
+                    <input type="checkbox" id="booking-notifications" checked>
+                </label>
+
+                <button type="button" id="save-notifications"
+                        class="report-btn">
+                    Save Notifications
+                </button>
+            </section>
+
+            <section class="panel settings-panel">
+                <h2>Security</h2>
+                <p class="settings-description">
+                    Demonstration form for changing your password.
+                </p>
+
+                <form id="password-form">
+                    <div class="settings-form-grid">
+                        <div class="settings-field">
+                            <label for="current-password">Current Password</label>
+                            <input type="password" id="current-password"
+                                   required minlength="6">
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="new-password">New Password</label>
+                            <input type="password" id="new-password"
+                                   required minlength="8">
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="confirm-password">Confirm New Password</label>
+                            <input type="password" id="confirm-password"
+                                   required minlength="8">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="report-btn">
+                        Validate Password Change
+                    </button>
+                </form>
+            </section>
+
+            <p id="settings-message" class="settings-message"
+               aria-live="polite"></p>
+
+        </section>
+    </main>
+</div>
+
+<script src="settings.js"></script>
+</body>
+</html>
