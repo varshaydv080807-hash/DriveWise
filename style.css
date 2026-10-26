@@ -1,1170 +1,478 @@
+/* DriveWise admin — same look as the customer view:
+   deep violet, auto-rickshaw green and yellow, black-and-yellow number plates,
+   and the Bricolage Grotesque typeface. Class names are unchanged, so every
+   page and script keeps working as before. */
 
-/* 1. Reset and common styles */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+:root {
+    --night: #221651;
+    --night-2: #33246F;
+    --violet: #5B3FD9;
+    --violet-dark: #4630B5;
+    --violet-soft: #ECE8FD;
+    --auto-green: #00A35C;
+    --green-ink: #00693B;
+    --green-soft: #D6F5E4;
+    --auto-yellow: #FFCE1F;
+    --yellow-dark: #F2B900;
+    --yellow-soft: #FFF3C4;
+    --yellow-ink: #6B4E00;
+    --plate-black: #17131F;
+    --ink: #1A1433;
+    --muted: #625C7A;
+    --paper: #F4F2FA;
+    --card: #FFFFFF;
+    --line: #E1DCF0;
+    --red: #D23A3F;
+    --red-soft: #FCE3E3;
+    --red-ink: #9B2327;
+    --focus: #FF8A00;
+
+    --font: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --r-sm: 8px;
+    --r-md: 14px;
+    --r-lg: 20px;
 }
+
+/* ---------- 1. Reset ---------- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f6fa;
-    color: #202b3c;
+    font-family: var(--font);
+    font-optical-sizing: auto;
+    background-color: var(--paper);
+    color: var(--ink);
     line-height: 1.5;
+    font-size: 15px;
 }
 
-a {
-    text-decoration: none;
-    color: inherit;
-}
+a { text-decoration: none; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 
-/* 2. Main layout */
-.dashboard {
-    display: flex;
-    min-height: 100vh;
-}
+h1, h2, h3 { font-weight: 800; letter-spacing: -0.015em; line-height: 1.1; }
 
-/* 3. Sidebar */
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ---------- 2. Layout ---------- */
+.dashboard { display: flex; min-height: 100vh; }
+.main-content { flex: 1; min-width: 0; background-color: var(--paper); }
+
+/* ---------- 3. Sidebar ---------- */
 .sidebar {
-    width: 245px;
-    background-color: #17253d;
-    color: #ffffff;
-    padding: 30px 20px;
+    width: 250px;
+    background-color: var(--night);
+    color: #fff;
+    padding: 26px 18px;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
 }
 
-.logo {
-    font-size: 27px;
-    margin-bottom: 40px;
-}
+.logo { display: inline-block; margin: 0 0 34px 4px; }
 
-.logo span {
-    color: #62c6b7;
+/* Number plate: the shared DriveWise signature */
+.plate {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    background: var(--plate-black);
+    color: var(--auto-yellow);
+    font-stretch: 75%;
+    font-weight: 800;
+    font-size: 1.35rem;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    line-height: 1.15;
+    border-radius: 5px;
+    padding: 0.14em 0.6em;
+    box-shadow: inset 0 0 0 1.5px var(--auto-yellow), inset 0 0 0 3px var(--plate-black);
 }
+.plate-gap { width: 0.2em; }
 
 .sidebar-label {
-    color: #9eabc0;
-    font-size: 11px;
-    letter-spacing: 1.5px;
-    margin-bottom: 15px;
+    color: #A79FD0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0 0 10px 10px;
 }
 
-.sidebar-nav {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
+.sidebar-nav { display: flex; flex-direction: column; gap: 4px; }
 
 .nav-link {
     display: block;
-    padding: 12px 14px;
-    border-radius: 8px;
-    color: #c5cede;
-    transition: 0.2s ease;
+    padding: 10px 14px;
+    border-radius: 999px;
+    color: #CFC8EE;
+    font-weight: 600;
 }
-
-.nav-link:hover,
-.nav-link.active {
-    background-color: #2c405f;
-    color: #ffffff;
-}
-
-.nav-link.active {
-    border-left: 3px solid #62c6b7;
-}
+.nav-link:hover { background-color: var(--night-2); color: #fff; }
+.nav-link.active { background-color: var(--auto-yellow); color: var(--night); }
 
 .sidebar-footer {
     margin-top: auto;
-    padding-top: 35px;
-    color: #ffffff;
+    padding: 16px 12px 0;
+    border-top: 1px solid var(--night-2);
+    color: #fff;
+    font-weight: 700;
 }
-
-.sidebar-footer small {
-    color: #9eabc0;
-    display: block;
-    margin-top: 4px;
-    font-size: 11px;
-}
-
-/* 4. Main content area */
-.main-content {
-    flex: 1;
-    min-width: 0;
-}
-
-/* 5. Top navbar */
-.topbar {
-    background-color: #ffffff;
-    padding: 22px 35px;
-    border-bottom: 1px solid #e5e9f0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-}
-
-.topbar h1 {
-    font-size: 25px;
-}
-
-.topbar p {
-    color: #7b8798;
-    font-size: 13px;
-    margin-top: 3px;
-}
-
-.admin-profile {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.profile-avatar {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    background-color: #d9f2ed;
-    color: #176d61;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-}
-
-.admin-profile strong,
-.admin-profile small {
-    display: block;
-}
-
-.admin-profile strong {
-    font-size: 13px;
-}
-
-.admin-profile small {
-    color: #7b8798;
-    font-size: 11px;
-    margin-top: 2px;
-}
-
-/* 6. Dashboard content */
-.dashboard-content {
-    padding: 32px 35px;
-}
-
-.section-heading {
-    margin-bottom: 22px;
-}
-
-.section-heading h2,
-.panel-heading h2 {
-    font-size: 19px;
-}
-
-.section-heading p,
-.panel-heading p {
-    color: #7b8798;
-    font-size: 13px;
-    margin-top: 4px;
-}
-
-/* 7. Summary cards */
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 20px;
-    margin-bottom: 28px;
-}
-
-.stat-card {
-    background-color: #ffffff;
-    border: 1px solid #e7ebf1;
-    border-radius: 12px;
-    padding: 22px;
-    box-shadow: 0 3px 12px rgba(25, 40, 65, 0.03);
-}
-
-.stat-card p {
-    color: #7b8798;
-    font-size: 13px;
-}
-
-.stat-card h3 {
-    font-size: 29px;
-    margin: 10px 0 5px;
-}
-
-.stat-note {
-    color: #15977d;
-    font-size: 11px;
-}
-
-/* 8. Common panel styles */
-.panel {
-    background-color: #ffffff;
-    border: 1px solid #e7ebf1;
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 25px;
-    box-shadow: 0 3px 12px rgba(25, 40, 65, 0.03);
-}
-
-.panel-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 15px;
-    margin-bottom: 22px;
-}
-
-.view-link {
-    color: #187d76;
-    font-size: 13px;
-    font-weight: bold;
-}
-
-/* 9. Bookings table */
-.table-wrapper {
-    width: 100%;
-    overflow-x: auto;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
-}
-
-th {
-    background-color: #f7f9fc;
-    color: #718096;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-th,
-td {
-    padding: 16px 14px;
-    border-bottom: 1px solid #edf0f5;
-    white-space: nowrap;
-}
-
-td {
-    font-size: 13px;
-}
-
-tbody tr:last-child td {
-    border-bottom: none;
-}
-
-tbody tr:hover {
-    background-color: #fafbfd;
-}
-
-/* 10. Booking status labels */
-.status {
+.sidebar-footer small { display: block; color: #A79FD0; font-weight: 500; font-size: 0.82rem; margin-top: 2px; }
+.customer-link {
     display: inline-block;
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: bold;
+    margin-top: 12px;
+    color: var(--auto-yellow);
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
+.customer-link:hover { color: #fff; }
 
-.confirmed {
-    background-color: #e0f5eb;
-    color: #16845b;
-}
-
-.pending {
-    background-color: #fff1d5;
-    color: #a66a00;
-}
-
-.completed {
-    background-color: #e7edff;
-    color: #415eb5;
-}
-
-/* 11. Vehicle availability */
-.availability-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 20px;
-}
-
-.availability-item {
+/* ---------- 4. Top bar ---------- */
+.topbar {
+    background-color: var(--card);
+    padding: 20px 34px;
+    border-bottom: 1.5px solid var(--line);
     display: flex;
     align-items: center;
-    gap: 14px;
-    background-color: #f8fafc;
-    border: 1px solid #edf0f5;
-    border-radius: 10px;
-    padding: 20px;
+    justify-content: space-between;
+    gap: 20px;
+}
+.topbar h1 { font-size: 2rem; letter-spacing: -0.025em; }
+.topbar p { color: var(--muted); font-size: 0.92rem; margin-top: 2px; }
+
+.admin-profile { display: flex; align-items: center; gap: 12px; }
+.profile-avatar {
+    width: 42px; height: 42px; border-radius: 50%;
+    background-color: var(--violet);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800;
+}
+.admin-profile strong, .admin-profile small { display: block; }
+.admin-profile strong { font-size: 0.92rem; }
+.admin-profile small { color: var(--muted); font-size: 0.8rem; }
+
+.admin-badge {
+    display: inline-block;
+    background: var(--violet-soft);
+    color: var(--violet-dark);
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 700;
 }
 
-.availability-item h3 {
-    font-size: 25px;
+/* ---------- 5. Content ---------- */
+.dashboard-content { padding: 30px 34px 48px; }
+
+.section-heading, .report-heading { margin-bottom: 20px; }
+.section-heading h2, .report-heading h2, .vehicle-page-heading h2 { font-size: 1.6rem; }
+.panel-heading h2, .settings-panel h2 { font-size: 1.3rem; font-weight: 700; color: var(--ink); }
+.section-heading p, .panel-heading p, .report-heading p, .vehicle-page-heading p {
+    color: var(--muted);
+    font-size: 0.92rem;
+    margin-top: 4px;
 }
-
-.availability-item p {
-    color: #7b8798;
-    font-size: 13px;
-}
-
-.availability-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-.available-dot {
-    background-color: #20ad7a;
-}
-
-.booked-dot {
-    background-color: #e5a52c;
-}
-
-.maintenance-dot {
-    background-color: #e16c6c;
-}
-
-/* 12. Responsive layout */
-@media (max-width: 1100px) {
-    .stats-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 760px) {
-    .dashboard {
-        flex-direction: column;
-    }
-
-    .sidebar {
-        width: 100%;
-        padding: 18px;
-    }
-
-    .logo {
-        margin-bottom: 20px;
-    }
-
-    .sidebar-nav {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .sidebar-footer {
-        display: none;
-    }
-
-    .topbar {
-        padding: 20px;
-    }
-
-    .dashboard-content {
-        padding: 22px 16px;
-    }
-
-    .availability-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 420px) {
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .topbar {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-}
-
-/* Vehicle Management page */
 
 .vehicle-page-heading {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 20px;
-    margin-bottom: 25px;
-}
-
-.vehicle-page-heading h2 {
-    font-size: 20px;
-}
-
-.vehicle-page-heading p {
-    color: #7b8798;
-    font-size: 13px;
-    margin-top: 4px;
-}
-
-.add-vehicle-btn {
-    background-color: #187d76;
-    color: #ffffff;
-    border: none;
-    border-radius: 8px;
-    padding: 12px 18px;
-    font-size: 13px;
-    font-weight: bold;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.add-vehicle-btn:hover {
-    background-color: #12675f;
-}
-
-/* Search bar and dropdowns */
-
-.vehicle-toolbar {
-    display: flex;
-    gap: 14px;
     margin-bottom: 24px;
-    flex-wrap: wrap;
 }
 
-.vehicle-search,
-.vehicle-toolbar select {
-    border: 1px solid #dce2eb;
-    border-radius: 8px;
-    padding: 12px 14px;
-    background-color: #ffffff;
-    color: #202b3c;
-    font-family: inherit;
-    font-size: 13px;
-}
-
-.vehicle-search {
-    flex: 1;
-    min-width: 220px;
-}
-
-.vehicle-toolbar select {
-    min-width: 145px;
-    cursor: pointer;
-}
-
-.vehicle-search:focus,
-.vehicle-toolbar select:focus {
-    outline: 2px solid #a6dcd5;
-    border-color: #187d76;
-}
-
-/* Vehicle status labels */
-
-.available-status {
-    background-color: #e0f5eb;
-    color: #16845b;
-}
-
-.booked-status {
-    background-color: #fff1d5;
-    color: #a66a00;
-}
-
-.maintenance-status {
-    background-color: #fde8e8;
-    color: #b83c3c;
-}
-
-/* Edit action */
-
-.action-btn {
-    border: 1px solid #dce2eb;
-    background-color: #ffffff;
-    color: #187d76;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
-}
-
-.action-btn:hover {
-    background-color: #eaf7f5;
-}
-
-/* Responsive adjustments */
-
-@media (max-width: 760px) {
-    .vehicle-page-heading {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .vehicle-toolbar {
-        flex-direction: column;
-    }
-
-    .vehicle-search,
-    .vehicle-toolbar select {
-        width: 100%;
-        min-width: 0;
-    }
-}
-
-/* Add Vehicle form */
-
-.vehicle-form-panel[hidden] {
-    display: none;
-}
-
-.form-grid {
+/* ---------- 6. Stat cards ---------- */
+.stats-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 22px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 26px;
 }
 
-.form-field {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+.stat-card {
+    background-color: var(--card);
+    border-radius: var(--r-lg);
+    padding: 20px 22px;
+    border-top: 5px solid var(--violet);
 }
+.stat-card:nth-child(4n + 2) { border-top-color: var(--auto-green); }
+.stat-card:nth-child(4n + 3) { border-top-color: var(--auto-yellow); }
+.stat-card:nth-child(4n + 4) { border-top-color: var(--night); }
 
-.form-field label {
-    font-size: 13px;
-    font-weight: bold;
-}
-
-.form-field input,
-.form-field select {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #dce2eb;
-    border-radius: 8px;
-    font-family: inherit;
-    font-size: 13px;
-    background-color: #ffffff;
-    color: #202b3c;
-}
-
-.form-field input:focus,
-.form-field select:focus {
-    outline: 2px solid #a6dcd5;
-    border-color: #187d76;
-}
-
-.form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 26px;
-}
-
-@media (max-width: 600px) {
-    .form-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* Delete vehicle button */
-
-.action-btn.delete-btn {
-    color: #b83c3c;
-    margin-left: 6px;
-}
-
-.action-btn.delete-btn:hover {
-    background-color: #fde8e8;
-    border-color: #f3caca;
-}
-
-/* Keep action buttons readable on small screens */
-
-td:last-child {
-    white-space: nowrap;
-}
-
-/* Booking management */
-
-.status.cancelled {
-    background-color: #fde8e8;
-    color: #b83c3c;
-}
-
-#bookingTableBody tr td:last-child {
-    white-space: nowrap;
-}
-
-#bookingTableBody .delete-btn {
-    margin-left: 6px;
-}
-
-#bookingTableBody .delete-btn:hover {
-    background-color: #fde8e8;
-    border-color: #f3caca;
-}
-
-/* Customer account status */
-
-.status.customer-active {
-    background-color: #e0f5eb;
-    color: #16845b;
-}
-
-.status.customer-inactive {
-    background-color: #fde8e8;
-    color: #b83c3c;
-}
-
-/* Customer table action buttons */
-
-#customerTableBody td:last-child {
-    white-space: nowrap;
-}
-
-#customerTableBody .delete-btn {
-    margin-left: 6px;
-}
-
-#customerTableBody .delete-btn:hover {
-    background-color: #fde8e8;
-    border-color: #f3caca;
-}
-
-/* ===== Reports Page ===== */
-
-.report-heading {
-    margin-bottom: 20px;
-}
-
-.report-heading h2,
-.panel-heading h2 {
-    margin: 0 0 6px;
-}
-
-.report-heading p,
-.panel-heading p {
-    color: #7b8798;
-    font-size: 14px;
-    margin: 0;
-}
-
-.admin-badge {
-    display: inline-block;
-    background: #e0f2f1;
-    color: #0f766e;
-    padding: 9px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.report-filters {
-    display: flex;
-    align-items: end;
-    flex-wrap: wrap;
-    gap: 14px;
-    margin-bottom: 12px;
-}
-
-.filter-field {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-}
-
-.filter-field label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #475569;
-}
-
-.filter-field input {
-    padding: 10px;
-    border: 1px solid #dbe2ea;
-    border-radius: 7px;
-    font: inherit;
-    color: #334155;
-}
-
-.report-btn {
-    background: #0f766e;
-    color: white;
-    border: none;
-    border-radius: 7px;
-    padding: 11px 15px;
-    font: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.report-btn:hover {
-    background: #115e59;
-}
-
-.report-btn.secondary {
-    background: #e8edf3;
-    color: #334155;
-}
-
-.report-btn.secondary:hover {
-    background: #dbe3ed;
-}
-
-.report-message {
-    font-size: 13px;
-    color: #64748b;
-    margin: 8px 0 18px;
-}
-
-.report-message.error-message {
-    color: #b91c1c;
-}
-
-.report-stats {
-    margin-bottom: 24px;
-}
-
-.report-stats .stat-card h2 {
+.stat-card p { color: var(--muted); font-size: 0.9rem; font-weight: 600; }
+.stat-card h2, .stat-card h3 {
+    font-size: 2.3rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin: 8px 0 4px;
+    color: var(--ink);
     overflow-wrap: anywhere;
 }
+.stat-card span, .stat-note { color: var(--muted); font-size: 0.82rem; }
 
-.reports-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-    gap: 22px;
-    margin-bottom: 24px;
+/* ---------- 7. Panels ---------- */
+.panel {
+    background-color: var(--card);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    margin-bottom: 22px;
 }
-
-.reports-grid .panel,
-.category-panel {
-    min-width: 0;
-}
-
 .panel-heading {
-    margin-bottom: 24px;
-}
-
-.revenue-chart {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
-
-.chart-row {
-    display: grid;
-    grid-template-columns: 48px minmax(50px, 1fr) auto;
-    align-items: center;
-    gap: 12px;
-}
-
-.chart-month {
-    color: #64748b;
-    font-size: 13px;
-}
-
-.chart-track,
-.breakdown-track {
-    height: 12px;
-    background: #edf2f7;
-    border-radius: 20px;
-    overflow: hidden;
-}
-
-.chart-bar {
-    height: 100%;
-    min-width: 3px;
-    background: #0f9d91;
-    border-radius: 20px;
-    transition: width 0.3s ease;
-}
-
-.chart-value {
-    font-size: 12px;
-    font-weight: 600;
-    color: #334155;
-    white-space: nowrap;
-}
-
-.breakdown-list {
-    display: flex;
-    flex-direction: column;
-    gap: 22px;
-}
-
-.breakdown-label {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+.view-link { color: var(--violet); font-size: 0.92rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.view-link:hover { color: var(--violet-dark); }
+
+/* ---------- 8. Tables ---------- */
+.table-wrapper { width: 100%; overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; text-align: left; }
+
+th {
+    background-color: var(--paper);
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+th:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); }
+th:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+
+th, td { padding: 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { border-bottom: 0; }
+td { font-size: 0.92rem; color: var(--ink); }
+td:first-child { font-weight: 700; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background-color: #F8F6FE; }
+
+/* ---------- 9. Status badges ---------- */
+.status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+.status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+.confirmed, .status-confirmed,
+.available-status, .status.customer-active { background-color: var(--green-soft); color: var(--green-ink); }
+
+.pending, .booked-status { background-color: var(--yellow-soft); color: var(--yellow-ink); }
+
+.completed, .status-completed { background-color: var(--violet-soft); color: var(--violet-dark); }
+
+.cancelled, .status.cancelled, .status-cancelled,
+.maintenance-status, .status.customer-inactive { background-color: var(--red-soft); color: var(--red-ink); }
+
+/* ---------- 10. Fleet availability ---------- */
+.availability-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.availability-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background-color: var(--paper);
+    border-radius: var(--r-md);
+    padding: 18px 20px;
+}
+.availability-item h3 { font-size: 2rem; letter-spacing: -0.03em; }
+.availability-item p { color: var(--muted); font-size: 0.9rem; font-weight: 600; }
+.availability-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+.available-dot { background-color: var(--auto-green); }
+.booked-dot { background-color: var(--auto-yellow); }
+.maintenance-dot { background-color: var(--red); }
+
+/* ---------- 11. Buttons ---------- */
+.add-vehicle-btn, .report-btn {
+    background-color: var(--violet);
+    color: #fff;
+    border: 0;
+    border-radius: 999px;
+    padding: 11px 20px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.add-vehicle-btn:hover, .report-btn:hover { background-color: var(--violet-dark); }
+
+/* The main "+ Add" action on each page gets the yellow, like the customer view's main buttons */
+.vehicle-page-heading .add-vehicle-btn { background-color: var(--auto-yellow); color: var(--plate-black); }
+.vehicle-page-heading .add-vehicle-btn:hover { background-color: var(--yellow-dark); }
+
+.report-btn.secondary { background-color: var(--violet-soft); color: var(--violet-dark); }
+.report-btn.secondary:hover { background-color: #DDD5FB; }
+
+.action-btn {
+    border: 1.5px solid var(--line);
+    background-color: #fff;
+    color: var(--violet);
+    padding: 5px 13px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.action-btn:hover { border-color: var(--violet); background-color: var(--violet-soft); }
+
+.action-btn.delete-btn { color: var(--red); margin-left: 6px; }
+.action-btn.delete-btn:hover { background-color: var(--red-soft); border-color: #F3C2C3; }
+
+td:last-child { white-space: nowrap; }
+
+/* ---------- 12. Toolbar and forms ---------- */
+.vehicle-toolbar { display: flex; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
+
+.vehicle-search,
+.vehicle-toolbar select,
+.form-field input, .form-field select,
+.filter-field input,
+.settings-field input, .settings-field select {
+    border: 1.5px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 11px 13px;
+    background-color: #fff;
+    color: var(--ink);
+    font-size: 0.92rem;
+}
+.vehicle-search { flex: 1; min-width: 220px; }
+.vehicle-toolbar select { min-width: 150px; cursor: pointer; }
+
+.vehicle-search:focus, .vehicle-toolbar select:focus,
+.form-field input:focus, .form-field select:focus,
+.filter-field input:focus,
+.settings-field input:focus, .settings-field select:focus {
+    outline: 3px solid var(--violet-soft);
+    border-color: var(--violet);
 }
 
-.breakdown-label strong {
-    color: #334155;
-}
+.vehicle-form-panel { border: 2px solid var(--violet-soft); }
+.vehicle-form-panel[hidden] { display: none; }
 
-.breakdown-fill {
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-field label, .filter-field label, .settings-field label { font-size: 0.86rem; font-weight: 600; color: var(--muted); }
+.form-field input, .form-field select { width: 100%; }
+.form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+
+/* ---------- 13. Reports ---------- */
+.report-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+.filter-field { display: flex; flex-direction: column; gap: 6px; }
+
+.report-message { font-size: 0.9rem; color: var(--muted); margin: 8px 0 18px; }
+.report-message.error-message { color: var(--red); font-weight: 600; }
+.report-stats { margin-bottom: 22px; }
+
+.reports-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; margin-bottom: 22px; }
+.reports-grid .panel, .category-panel { min-width: 0; }
+
+.revenue-chart { display: flex; flex-direction: column; gap: 16px; }
+.chart-row { display: grid; grid-template-columns: 60px minmax(50px, 1fr) auto; align-items: center; gap: 12px; }
+.chart-month { color: var(--muted); font-size: 0.88rem; font-weight: 600; }
+
+.chart-track, .breakdown-track { height: 14px; background: var(--paper); border-radius: 999px; overflow: hidden; }
+.chart-bar {
     height: 100%;
-    background: #0f9d91;
-    border-radius: 20px;
+    min-width: 3px;
+    background: var(--violet);
+    border-radius: 999px;
     transition: width 0.3s ease;
 }
+.chart-row:nth-child(even) .chart-bar { background: var(--auto-green); }
+.chart-value { font-size: 0.86rem; font-weight: 700; white-space: nowrap; }
 
-.status {
-    display: inline-block;
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-}
+.breakdown-list { display: flex; flex-direction: column; gap: 20px; }
+.breakdown-label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.breakdown-fill { height: 100%; background: var(--auto-yellow); border-radius: 999px; transition: width 0.3s ease; }
 
-.status-completed {
-    background: #dcfce7;
-    color: #166534;
-}
+.empty-message { color: var(--muted); font-size: 0.92rem; padding: 20px 0; }
 
-.status-confirmed {
-    background: #dbeafe;
-    color: #1d4ed8;
-}
+.category-panel table { width: 100%; }
 
-.status-cancelled {
-    background: #fee2e2;
-    color: #b91c1c;
-}
+/* ---------- 14. Settings ---------- */
+.settings-panel { margin-bottom: 22px; }
+.settings-panel h2 { margin-bottom: 6px; }
+.settings-description { margin-bottom: 20px; color: var(--muted); font-size: 0.92rem; }
 
-.empty-message {
-    color: #64748b;
-    font-size: 14px;
-    padding: 20px 0;
-}
-
-.category-panel {
-    margin-bottom: 24px;
-}
-
-.category-panel table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.category-panel th,
-.category-panel td {
-    text-align: left;
-    padding: 15px 12px;
-    border-bottom: 1px solid #e8edf3;
-    font-size: 14px;
-}
-
-.category-panel th {
-    color: #64748b;
-    background: #f8fafc;
-    font-weight: 600;
-}
-
-.category-panel tbody tr:hover {
-    background: #f8fafc;
-}
-
-/* Responsive layout */
-
-@media (max-width: 900px) {
-    .reports-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 600px) {
-    .report-filters {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    .filter-field input,
-    .report-btn {
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .chart-row {
-        grid-template-columns: 38px minmax(30px, 1fr);
-        gap: 8px;
-    }
-
-    .chart-value {
-        grid-column: 2;
-    }
-
-    .category-panel {
-        overflow-x: auto;
-    }
-
-    .category-panel table {
-        min-width: 500px;
-    }
-}
-
-/* ===== Settings Page ===== */
-
-.settings-panel {
-    margin-bottom: 24px;
-}
-
-.settings-panel h2 {
-    margin: 0 0 8px;
-    color: #1e293b;
-}
-
-.settings-description {
-    margin: 0 0 22px;
-    color: #7b8798;
-    font-size: 14px;
-}
-
-.settings-form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
-    margin-bottom: 22px;
-}
-
-.settings-field {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.settings-field label {
-    color: #475569;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-.settings-field input,
-.settings-field select {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 11px 12px;
-    border: 1px solid #dbe2ea;
-    border-radius: 7px;
-    background: #fff;
-    color: #334155;
-    font: inherit;
-}
-
-.settings-field input:focus,
-.settings-field select:focus {
-    outline: 2px solid #99f6e4;
-    border-color: #0f9d91;
-}
+.settings-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 20px; }
+.settings-field { display: flex; flex-direction: column; gap: 6px; }
+.settings-field input, .settings-field select { width: 100%; }
 
 .setting-toggle {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 20px;
-    padding: 16px 0;
-    border-bottom: 1px solid #e8edf3;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
     cursor: pointer;
 }
+.setting-toggle span { display: flex; flex-direction: column; gap: 4px; }
+.setting-toggle strong { font-size: 0.95rem; }
+.setting-toggle small { color: var(--muted); font-size: 0.86rem; }
+.setting-toggle input { width: 20px; height: 20px; accent-color: var(--violet); cursor: pointer; flex-shrink: 0; }
+.setting-toggle + .report-btn { margin-top: 20px; }
 
-.setting-toggle span {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+.settings-message { padding: 12px 0; color: var(--green-ink); font-size: 0.92rem; font-weight: 600; }
+.settings-message.settings-error { color: var(--red); }
+
+/* ---------- 15. Responsive ---------- */
+@media (max-width: 1100px) {
+    .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-.setting-toggle strong {
-    color: #334155;
-    font-size: 14px;
+@media (max-width: 900px) {
+    .reports-grid { grid-template-columns: 1fr; }
 }
 
-.setting-toggle small {
-    color: #7b8798;
-    font-size: 13px;
-}
+@media (max-width: 760px) {
+    .dashboard { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; position: static; padding: 16px; }
+    .logo { margin-bottom: 14px; }
+    .sidebar-label { display: none; }
+    .sidebar-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .nav-link { text-align: center; padding: 8px 6px; font-size: 0.88rem; }
+    .sidebar-footer { display: none; }
 
-.setting-toggle input {
-    width: 18px;
-    height: 18px;
-    accent-color: #0f766e;
-    cursor: pointer;
-    flex-shrink: 0;
-}
+    .topbar { padding: 18px 16px; }
+    .topbar h1 { font-size: 1.6rem; }
+    .dashboard-content { padding: 22px 16px 40px; }
 
-.setting-toggle + .report-btn {
-    margin-top: 22px;
-}
-
-.settings-message {
-    padding: 12px 0;
-    color: #0f766e;
-    font-size: 14px;
-}
-
-.settings-message.settings-error {
-    color: #b91c1c;
+    .availability-grid { grid-template-columns: 1fr; }
+    .vehicle-page-heading { align-items: flex-start; flex-direction: column; }
+    .vehicle-toolbar { flex-direction: column; }
+    .vehicle-search, .vehicle-toolbar select { width: 100%; min-width: 0; }
 }
 
 @media (max-width: 600px) {
-    .settings-form-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .setting-toggle {
-        align-items: flex-start;
-    }
+    .form-grid, .settings-form-grid { grid-template-columns: 1fr; }
+    .report-filters { align-items: stretch; flex-direction: column; }
+    .filter-field input, .report-btn { width: 100%; }
+    .chart-row { grid-template-columns: 38px minmax(30px, 1fr); gap: 8px; }
+    .chart-value { grid-column: 2; }
+    .category-panel { overflow-x: auto; }
+    .category-panel table { min-width: 500px; }
+    .setting-toggle { align-items: flex-start; }
 }
 
-/* ===== DriveWise: Forest Green + Warm Cream Theme ===== */
-
-:root {
-    --dw-forest: #183A32;
-    --dw-green: #386641;
-    --dw-lime: #A7C957;
-    --dw-cream: #F7F5EC;
-    --dw-white: #FFFFFF;
-    --dw-text: #24332D;
-    --dw-muted: #718078;
-    --dw-border: #E2E7DC;
-    --dw-soft-green: #E8EFE5;
+@media (max-width: 340px) {
+    .stats-grid { grid-template-columns: 1fr; }
 }
 
-/* Main page */
-body {
-    background-color: var(--dw-cream);
-    color: var(--dw-text);
+@media (max-width: 420px) {
+    .stat-card h2, .stat-card h3 { font-size: 1.8rem; }
+    .topbar { align-items: flex-start; flex-direction: column; }
 }
 
-/* Sidebar */
-.sidebar {
-    background-color: var(--dw-forest);
-    color: var(--dw-white);
-}
-
-.sidebar h2 {
-    color: var(--dw-white);
-}
-
-.sidebar h2 span {
-    color: var(--dw-lime);
-}
-
-/* Navigation */
-.sidebar nav a {
-    color: #E6EEE7;
-    border-left: 3px solid transparent;
-}
-
-.sidebar nav a:hover {
-    background-color: #294B40;
-    color: var(--dw-white);
-}
-
-.sidebar nav a.active {
-    background-color: var(--dw-green);
-    border-left: 3px solid var(--dw-lime);
-    color: var(--dw-white);
-}
-
-/* Header */
-.topbar {
-    background-color: var(--dw-white);
-    border-bottom-color: var(--dw-border);
-}
-
-.topbar h1,
-.topbar h2 {
-    color: var(--dw-forest);
-}
-
-/* Main content */
-.main-content,
-.dashboard-content {
-    background-color: var(--dw-cream);
-}
-
-/* Cards and panels */
-.panel,
-.stat-card {
-    background-color: var(--dw-white);
-    border-color: var(--dw-border);
-}
-
-.stat-card h2,
-.panel h2 {
-    color: var(--dw-forest);
-}
-
-/* Buttons */
-button,
-.report-btn {
-    background-color: var(--dw-green);
-    color: var(--dw-white);
-}
-
-button:hover,
-.report-btn:hover {
-    background-color: var(--dw-forest);
-}
-
-.report-btn.secondary {
-    background-color: var(--dw-soft-green);
-    color: var(--dw-forest);
-}
-
-/* Tables */
-table th {
-    background-color: var(--dw-soft-green);
-    color: var(--dw-forest);
-}
-
-table td {
-    color: var(--dw-text);
-    border-bottom-color: var(--dw-border);
-}
-
-table tbody tr:hover {
-    background-color: #F4F7F0;
-}
-
-/* Form fields */
-input,
-select,
-textarea {
-    border-color: var(--dw-border);
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-    outline-color: var(--dw-lime);
-    border-color: var(--dw-green);
-}
-
-/* Small accents */
-.admin-badge {
-    background-color: var(--dw-soft-green);
-    color: var(--dw-forest);
-}
-
-.chart-bar,
-.breakdown-fill {
-    background-color: var(--dw-green);
-}
-
-/* Keep status badges distinguishable */
-.status-completed {
-    background-color: #E1F2E4;
-    color: #245C32;
-}
-
-.status-confirmed {
-    background-color: #E5EDF9;
-    color: #244D80;
-}
-
-.status-cancelled {
-    background-color: #FBE7E4;
-    color: #963D32;
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
 }
