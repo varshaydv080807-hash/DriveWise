@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DriveWise — Rent a car, bike or scooter in Delhi NCR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="customer-portal.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#browse" aria-label="DriveWise home">
+        <span class="plate plate-logo">DRIVE<span class="plate-gap"></span>WISE</span>
+      </a>
+      <nav class="mainnav" aria-label="Main">
+        <a href="#browse" data-nav="browse">Find a ride</a>
+        <a href="#trips" data-nav="trips">My trips <span class="count" id="tripsCount" hidden></span></a>
+        <a href="#saved" data-nav="saved">Saved <span class="count" id="savedCount" hidden></span></a>
+        <a href="#profile" data-nav="profile" class="nav-profile">
+          <span class="avatar" id="navAvatar">RS</span><span class="nav-profile-name" id="navName">Profile</span>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ================= BROWSE ================= -->
+    <section class="view" id="view-browse" aria-labelledby="browseTitle">
+      <div class="hero">
+        <div class="hero-grid">
+          <div class="hero-text">
+            <h1 id="browseTitle">Pick it up nearby. Or have it dropped at your door.</h1>
+            <p>Cars, bikes and scooters from rental companies and local owners across Delhi NCR. Drive yourself, or book a car with a driver.</p>
+          </div>
+          <figure class="hero-photo" id="heroPhoto"></figure>
+        </div>
+        <div class="lane" aria-hidden="true"></div>
+
+        <form class="search" id="searchForm" novalidate>
+          <div class="search-types" role="radiogroup" aria-label="Vehicle type">
+            <label><input type="radio" name="type" value="all" checked><span>Everything</span></label>
+            <label><input type="radio" name="type" value="car"><span>Cars</span></label>
+            <label><input type="radio" name="type" value="bike"><span>Bikes</span></label>
+            <label><input type="radio" name="type" value="scooter"><span>Scooters</span></label>
+          </div>
+          <div class="search-fields">
+            <label class="field field-loc">
+              <span class="field-label">Pickup point</span>
+              <select name="location" id="searchLocation">
+                <option value="all">Anywhere in Delhi NCR</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">Pickup</span>
+              <input type="datetime-local" name="pickup" id="searchPickup" required>
+            </label>
+            <label class="field">
+              <span class="field-label">Return</span>
+              <input type="datetime-local" name="dropoff" id="searchDropoff" required>
+            </label>
+            <button class="btn btn-go" type="submit">Show vehicles</button>
+          </div>
+          <p class="search-error" id="searchError" role="alert" hidden></p>
+        </form>
+      </div>
+
+      <div class="results-wrap" id="results">
+        <aside class="filters" aria-label="Filters">
+          <div class="filters-head">
+            <h2>Filters</h2>
+            <button type="button" class="linkbtn" id="clearFilters">Reset</button>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Search by name</span>
+            <input type="search" id="fText" placeholder="e.g. Creta, Activa">
+          </label>
+
+          <fieldset>
+            <legend>Fuel</legend>
+            <div class="chips" id="fFuel"></div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Gearbox</legend>
+            <div class="chips" id="fTrans"></div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Listed by</legend>
+            <div class="chips" id="fOwner">
+              <label class="chip"><input type="checkbox" value="company"><span>Rental company</span></label>
+              <label class="chip"><input type="checkbox" value="individual"><span>Local owner</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Minimum seats</legend>
+            <div class="chips" id="fSeats">
+              <label class="chip"><input type="radio" name="seats" value="0" checked><span>Any</span></label>
+              <label class="chip"><input type="radio" name="seats" value="4"><span>4+</span></label>
+              <label class="chip"><input type="radio" name="seats" value="5"><span>5+</span></label>
+              <label class="chip"><input type="radio" name="seats" value="7"><span>7+</span></label>
+            </div>
+          </fieldset>
+
+          <label class="field">
+            <span class="field-label">Max price per day: <strong id="fPriceOut">₹6,000</strong></span>
+            <input type="range" id="fPrice" min="300" max="6000" step="100" value="6000">
+          </label>
+
+          <label class="toggle">
+            <input type="checkbox" id="fDriver">
+            <span>Can be booked with a driver</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="fAvail" checked>
+            <span>Only show vehicles free for my dates</span>
+          </label>
+        </aside>
+
+        <div class="results">
+          <div class="results-head">
+            <p id="resultsSummary" aria-live="polite"></p>
+            <label class="sort">
+              <span>Sort</span>
+              <select id="sortBy">
+                <option value="recommended">Recommended</option>
+                <option value="priceAsc">Price: low to high</option>
+                <option value="priceDesc">Price: high to low</option>
+                <option value="rating">Owner rating</option>
+              </select>
+            </label>
+          </div>
+          <ul class="listing" id="listing"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TRIPS ================= -->
+    <section class="view" id="view-trips" aria-labelledby="tripsTitle" hidden>
+      <div class="page-head">
+        <h1 id="tripsTitle">My trips</h1>
+        <div class="tabs" role="tablist" aria-label="Trip status">
+          <button role="tab" class="tab" data-tab="upcoming" aria-selected="true">Current and upcoming</button>
+          <button role="tab" class="tab" data-tab="past" aria-selected="false">Past</button>
+          <button role="tab" class="tab" data-tab="cancelled" aria-selected="false">Cancelled</button>
+        </div>
+      </div>
+      <ul class="trips" id="tripList"></ul>
+    </section>
+
+    <!-- ================= SAVED ================= -->
+    <section class="view" id="view-saved" aria-labelledby="savedTitle" hidden>
+      <div class="page-head">
+        <h1 id="savedTitle">Saved vehicles</h1>
+      </div>
+      <ul class="listing" id="savedList"></ul>
+    </section>
+
+    <!-- ================= PROFILE ================= -->
+    <section class="view" id="view-profile" aria-labelledby="profileTitle" hidden>
+      <div class="page-head">
+        <h1 id="profileTitle">Profile</h1>
+      </div>
+      <div class="profile-grid">
+        <form class="panel" id="profileForm">
+          <h2>Your details</h2>
+          <label class="field"><span class="field-label">Full name</span><input name="name" required autocomplete="name"></label>
+          <label class="field"><span class="field-label">Email</span><input name="email" type="email" required autocomplete="email"></label>
+          <label class="field"><span class="field-label">Phone</span><input name="phone" required autocomplete="tel"></label>
+          <label class="field"><span class="field-label">City</span>
+            <select name="city"><option>Delhi</option><option>Noida</option><option>Gurugram</option></select>
+          </label>
+          <p class="form-error" id="profileError" role="alert" hidden></p>
+          <button class="btn btn-primary" type="submit">Save changes</button>
+        </form>
+
+        <div class="profile-side">
+          <div class="panel">
+            <h2>Driving licence</h2>
+            <div class="licence-card">
+              <span class="licence-no" id="licenceNo"></span>
+              <span class="badge badge-ok" id="licenceStatus">Verified</span>
+            </div>
+            <p class="muted">Bring the original licence at pickup. You don't need it for trips booked with a driver.</p>
+            <dl class="stats" id="profileStats"></dl>
+          </div>
+
+          <div class="panel">
+            <h2>Saved addresses</h2>
+            <p class="muted">Used for doorstep delivery.</p>
+            <ul class="address-list" id="addressList"></ul>
+            <form class="address-form" id="addressForm" novalidate>
+              <label class="field"><span class="field-label">Label</span><input name="label" placeholder="e.g. Hostel" maxlength="20"></label>
+              <label class="field"><span class="field-label">Full address</span><input name="line" placeholder="House no., street, area, PIN code"></label>
+              <p class="form-error" id="addressError" role="alert" hidden></p>
+              <button class="btn btn-ghost" type="submit">Add address</button>
+            </form>
+          </div>
+
+          <button class="btn btn-ghost" type="button" id="resetDemo">Reset demo data</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>DriveWise customer view. Vehicle photos from Wikimedia Commons.
+      <button type="button" class="linkbtn" data-action="credits">See photo credits</button></p>
+  </footer>
+
+  <!-- Vehicle, booking and trip details all open in this side sheet -->
+  <dialog class="sheet" id="sheet" aria-labelledby="sheetTitle">
+    <div class="sheet-inner" id="sheetBody"></div>
+  </dialog>
+
+  <!-- Live GPS tracking -->
+  <dialog class="tracker" id="tracker" aria-labelledby="trackTitle">
+    <div class="tracker-inner">
+      <div class="tracker-head">
+        <div>
+          <h2 id="trackTitle">Live tracking</h2>
+          <p class="muted" id="trackSub"></p>
+        </div>
+        <button class="iconbtn" type="button" data-action="close-tracker" aria-label="Close tracking">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="tracker-body">
+        <div class="map" id="map" role="img" aria-label="Map showing the vehicle's location"></div>
+        <div class="tracker-info" id="trackInfo" aria-live="polite"></div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="confirm" id="confirmDialog" aria-labelledby="confirmTitle">
+    <form method="dialog">
+      <h2 id="confirmTitle">Cancel this trip?</h2>
+      <p id="confirmText"></p>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" value="no">Keep trip</button>
+        <button class="btn btn-danger" value="yes">Cancel trip</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="confirm credits" id="creditsDialog" aria-labelledby="creditsTitle">
+    <form method="dialog">
+      <h2 id="creditsTitle">Photo credits</h2>
+      <p>Vehicle photos are freely licensed images from Wikimedia Commons. Each link opens the file page with the photographer's name and licence.</p>
+      <ul id="creditsList"></ul>
+      <div class="confirm-actions"><button class="btn btn-primary" value="ok">Close</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="customer-data.js"></script>
+  <script src="customer-portal.js"></script>
+</body>
+</html>
