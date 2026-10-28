@@ -1,4 +1,11 @@
 
+/*
+ * DriveWise Vehicle Management
+ * Frontend demonstration only.
+ * Records are not yet connected to a database.
+ * Existing style.css and colour palette remain unchanged.
+ */
+
 const searchInput = document.getElementById("vehicleSearch");
 const categoryFilter = document.getElementById("categoryFilter");
 const statusFilter = document.getElementById("statusFilter");
@@ -7,115 +14,148 @@ const tableBody = document.getElementById("vehicleTableBody");
 const openFormButton = document.getElementById("openVehicleForm");
 const closeFormButton = document.getElementById("closeVehicleForm");
 const cancelFormButton = document.getElementById("cancelVehicleForm");
+
 const formPanel = document.getElementById("vehicleFormPanel");
 const vehicleForm = document.getElementById("vehicleForm");
 const formTitle = document.getElementById("vehicleFormTitle");
 
 let editingRow = null;
 
-// Convert a status into its corresponding CSS class.
+// Sample provider records.
+// Later, these will come from the PROVIDER table.
+const providerNames = {
+    PROV1001: "DriveWise Fleet",
+    PROV1002: "Rider Rentals",
+    PROV1003: "City Mobility"
+};
+
+// Sample branch records.
+// Later, these will come from the BRANCH table.
+const branchNames = {
+    BR001: "Dwarka",
+    BR002: "Gurugram",
+    BR003: "Rohini"
+};
+
 function getStatusClass(status) {
-    if (status === "Available") return "available-status";
-    if (status === "Booked") return "booked-status";
+    if (status === "Available") {
+        return "available-status";
+    }
+
+    if (status === "Booked") {
+        return "booked-status";
+    }
+
     return "maintenance-status";
 }
 
-// Update the status badge in a table row.
-function updateStatusBadge(row, status) {
+function setStatusBadge(row, status) {
     const badge = document.createElement("span");
-    badge.classList.add("status", getStatusClass(status));
+
+    badge.className = `status ${getStatusClass(status)}`;
     badge.textContent = status;
-    row.cells[5].replaceChildren(badge);
+
+    row.cells[7].replaceChildren(badge);
 }
 
-// Add Edit and Delete buttons to every row.
+// Create Edit and Delete buttons for every vehicle.
 function setupActionButtons() {
-    const rows = tableBody.querySelectorAll("tr");
-
-    rows.forEach(function (row) {
-        const actionCell = row.cells[6];
+    tableBody.querySelectorAll("tr").forEach(row => {
+        const actionCell = row.cells[8];
 
         if (!actionCell) return;
 
         actionCell.replaceChildren();
 
         const editButton = document.createElement("button");
+
         editButton.type = "button";
         editButton.className = "action-btn";
         editButton.dataset.action = "edit";
         editButton.textContent = "Edit";
 
+        editButton.setAttribute(
+            "aria-label",
+            `Edit ${row.cells[0].textContent.trim()}`
+        );
+
         const deleteButton = document.createElement("button");
+
         deleteButton.type = "button";
         deleteButton.className = "action-btn delete-btn";
         deleteButton.dataset.action = "delete";
         deleteButton.textContent = "Delete";
 
+        deleteButton.setAttribute(
+            "aria-label",
+            `Delete ${row.cells[0].textContent.trim()}`
+        );
+
         actionCell.append(editButton, deleteButton);
     });
 }
 
-// Search and filter vehicles.
+// Search by vehicle, registration number, provider or branch.
+// Category and status filters work together with search.
 function filterVehicles() {
     const searchText = searchInput.value.toLowerCase().trim();
     const selectedCategory = categoryFilter.value.toLowerCase();
     const selectedStatus = statusFilter.value.toLowerCase();
 
-    const rows = tableBody.querySelectorAll("tr");
-    let visibleCount = 0;
+    tableBody.querySelectorAll("tr").forEach(row => {
+        const searchableText = [
+            row.cells[0],
+            row.cells[1],
+            row.cells[3],
+            row.cells[4]
+        ]
+            .map(cell => cell.textContent.toLowerCase())
+            .join(" ");
 
-    rows.forEach(function (row) {
-        const name = row.cells[0].textContent.toLowerCase();
-        const registration = row.cells[1].textContent.toLowerCase();
-        const category = row.cells[2].textContent.toLowerCase();
-        const status = row.cells[5].textContent.trim().toLowerCase();
+        const category = row.cells[2].textContent
+            .trim()
+            .toLowerCase();
 
-        const matchesSearch =
-            name.includes(searchText) ||
-            registration.includes(searchText);
+        const status = row.cells[7].textContent
+            .trim()
+            .toLowerCase();
+
+        const matchesSearch = searchableText.includes(searchText);
 
         const matchesCategory =
-            selectedCategory === "" ||
-            category === selectedCategory;
+            !selectedCategory || category === selectedCategory;
 
         const matchesStatus =
-            selectedStatus === "" ||
-            status === selectedStatus;
+            !selectedStatus || status === selectedStatus;
 
-        const isVisible =
-            matchesSearch && matchesCategory && matchesStatus;
-
-        row.style.display = isVisible ? "" : "none";
-
-        if (isVisible) visibleCount++;
+        row.style.display =
+            matchesSearch && matchesCategory && matchesStatus
+                ? ""
+                : "none";
     });
 
     updateSummary();
 }
 
-searchInput.addEventListener("input", filterVehicles);
-categoryFilter.addEventListener("change", filterVehicles);
-statusFilter.addEventListener("change", filterVehicles);
-
-// Update the summary cards using the complete vehicle list.
+// Calculate fleet totals from all records, not just filtered rows.
 function updateSummary() {
     const rows = Array.from(tableBody.querySelectorAll("tr"));
 
-    let available = 0;
-    let booked = 0;
-    let maintenance = 0;
+    const counts = {
+        Available: 0,
+        Booked: 0,
+        Maintenance: 0
+    };
 
-    rows.forEach(function (row) {
-        const status = row.cells[5].textContent.trim();
+    rows.forEach(row => {
+        const status = row.cells[7].textContent.trim();
 
-        if (status === "Available") available++;
-        else if (status === "Booked") booked++;
-        else if (status === "Maintenance") maintenance++;
+        if (Object.prototype.hasOwnProperty.call(counts, status)) {
+            counts[status]++;
+        }
     });
 
-    const cards = document.querySelectorAll(".stat-card");
-
-    cards.forEach(function (card) {
+    document.querySelectorAll(".stat-card").forEach(card => {
         const label = card.querySelector("p")?.textContent.trim();
         const number = card.querySelector("h3");
 
@@ -124,42 +164,80 @@ function updateSummary() {
         if (label === "Total Vehicles") {
             number.textContent = rows.length;
         } else if (label === "Available") {
-            number.textContent = available;
+            number.textContent = counts.Available;
         } else if (label === "Booked") {
-            number.textContent = booked;
+            number.textContent = counts.Booked;
         } else if (label === "Maintenance") {
-            number.textContent = maintenance;
+            number.textContent = counts.Maintenance;
         }
     });
 }
 
-// Open a blank form for adding a vehicle.
+// Open a blank form for a new vehicle.
 function openVehicleForm() {
     editingRow = null;
+
     vehicleForm.reset();
     formTitle.textContent = "Add New Vehicle";
+
     formPanel.hidden = false;
 
     formPanel.scrollIntoView({
         behavior: "smooth",
         block: "start"
     });
+
+    document.getElementById("vehicleName").focus();
 }
 
 // Close the form and clear its fields.
 function closeVehicleForm() {
     formPanel.hidden = true;
+
     vehicleForm.reset();
     editingRow = null;
+
     formTitle.textContent = "Add New Vehicle";
 }
 
+// Populate the form with the selected vehicle's details.
+function fillFormFromRow(row) {
+    const fieldValues = {
+        vehicleName: row.cells[0].textContent.trim(),
+        registration: row.cells[1].textContent.trim(),
+        vehicleCategory: row.cells[2].textContent.trim(),
+        vehicleProvider: row.dataset.providerId || "",
+        vehicleBranch: row.dataset.branchId || "",
+        vehiclePrice:
+            row.dataset.hourlyPrice ||
+            row.cells[5].textContent.replace(/[₹,]/g, "").trim(),
+        fuelType: row.cells[6].textContent.trim(),
+        vehicleStatus: row.cells[7].textContent.trim(),
+        vehicleBrand: row.dataset.brand || "",
+        vehicleModel: row.dataset.model || "",
+        vehicleYear: row.dataset.year || "",
+        vehicleSeats: row.dataset.seats || "",
+        vehicleDailyPrice: row.dataset.dailyPrice || "",
+        vehicleVerification: row.dataset.verification || "Pending",
+        gpsEnabled: row.dataset.gps || "No"
+    };
+
+    Object.entries(fieldValues).forEach(([id, value]) => {
+        document.getElementById(id).value = value;
+    });
+}
+
+// Connect buttons and filters.
 openFormButton.addEventListener("click", openVehicleForm);
 closeFormButton.addEventListener("click", closeVehicleForm);
 cancelFormButton.addEventListener("click", closeVehicleForm);
 
-// Handle Edit and Delete clicks for both old and new rows.
-tableBody.addEventListener("click", function (event) {
+searchInput.addEventListener("input", filterVehicles);
+categoryFilter.addEventListener("change", filterVehicles);
+statusFilter.addEventListener("change", filterVehicles);
+
+// Handle Edit and Delete using event delegation.
+tableBody.addEventListener("click", event => {
     const button = event.target.closest("button[data-action]");
 
     if (!button) return;
@@ -171,23 +249,7 @@ tableBody.addEventListener("click", function (event) {
     if (button.dataset.action === "edit") {
         editingRow = row;
 
-        document.getElementById("vehicleName").value =
-            row.cells[0].textContent.trim();
-
-        document.getElementById("registration").value =
-            row.cells[1].textContent.trim();
-
-        document.getElementById("vehicleCategory").value =
-            row.cells[2].textContent.trim();
-
-        document.getElementById("vehiclePrice").value =
-            row.cells[3].textContent.replace(/[₹,]/g, "").trim();
-
-        document.getElementById("fuelType").value =
-            row.cells[4].textContent.trim();
-
-        document.getElementById("vehicleStatus").value =
-            row.cells[5].textContent.trim();
+        fillFormFromRow(row);
 
         formTitle.textContent = "Edit Vehicle";
         formPanel.hidden = false;
@@ -196,14 +258,16 @@ tableBody.addEventListener("click", function (event) {
             behavior: "smooth",
             block: "start"
         });
+
+        document.getElementById("vehicleName").focus();
     }
 
     if (button.dataset.action === "delete") {
-        const vehicleName = row.cells[0].textContent.trim();
+        const name = row.cells[0].textContent.trim();
         const registration = row.cells[1].textContent.trim();
 
         const confirmed = confirm(
-            `Delete ${vehicleName} (${registration})?`
+            `Delete ${name} (${registration})?`
         );
 
         if (!confirmed) return;
@@ -213,77 +277,176 @@ tableBody.addEventListener("click", function (event) {
         }
 
         row.remove();
+
         filterVehicles();
     }
 });
 
-// Add a new vehicle or save edits to an existing vehicle.
-vehicleForm.addEventListener("submit", function (event) {
+// Validate and save a vehicle.
+vehicleForm.addEventListener("submit", event => {
     event.preventDefault();
 
-    const name = document.getElementById("vehicleName").value.trim();
-    const registration = document.getElementById("registration")
-        .value.trim().toUpperCase();
+    const value = id =>
+        document.getElementById(id).value.trim();
 
-    const category = document.getElementById("vehicleCategory").value;
-    const price = Number(document.getElementById("vehiclePrice").value);
-    const fuel = document.getElementById("fuelType").value;
-    const status = document.getElementById("vehicleStatus").value;
+    const name = value("vehicleName");
+    const registration = value("registration").toUpperCase();
 
-    if (!name || !registration || !category || !fuel || !status) {
-        alert("Please fill in all the fields.");
+    const brand = value("vehicleBrand");
+    const model = value("vehicleModel");
+
+    const year = Number(value("vehicleYear"));
+    const category = value("vehicleCategory");
+    const seats = Number(value("vehicleSeats"));
+
+    const hourlyPrice = Number(value("vehiclePrice"));
+
+    const dailyPriceText = value("vehicleDailyPrice");
+    const dailyPrice =
+        dailyPriceText === "" ? "" : Number(dailyPriceText);
+
+    const fuel = value("fuelType");
+    const providerId = value("vehicleProvider");
+    const branchId = value("vehicleBranch");
+
+    const status = value("vehicleStatus");
+    const verification = value("vehicleVerification");
+    const gps = value("gpsEnabled");
+
+    const currentYear = new Date().getFullYear();
+
+    // Required-field validation.
+    if (
+        !name ||
+        !registration ||
+        !brand ||
+        !model ||
+        !category ||
+        !fuel ||
+        !providerId ||
+        !branchId ||
+        !status ||
+        !verification ||
+        !gps
+    ) {
+        alert("Please complete all required fields.");
         return;
     }
 
-    if (!Number.isFinite(price) || price <= 0) {
-        alert("Please enter a valid daily rental price.");
+    // Manufacture-year validation.
+    if (
+        !Number.isInteger(year) ||
+        year < 1990 ||
+        year > currentYear + 1
+    ) {
+        alert(
+            `Enter a valid manufacture year between 1990 and ${currentYear + 1}.`
+        );
         return;
     }
 
-    // A registration number must be unique.
-    const rows = tableBody.querySelectorAll("tr");
+    // Seating-capacity validation.
+    if (
+        !Number.isInteger(seats) ||
+        seats < 1 ||
+        seats > 100
+    ) {
+        alert("Enter a valid seating capacity between 1 and 100.");
+        return;
+    }
 
-    for (const row of rows) {
+    // Hourly-price validation.
+    if (
+        !Number.isFinite(hourlyPrice) ||
+        hourlyPrice <= 0
+    ) {
+        alert("Enter a valid price per hour greater than zero.");
+        return;
+    }
+
+    // Optional daily-price validation.
+    if (
+        dailyPrice !== "" &&
+        (!Number.isFinite(dailyPrice) || dailyPrice < 0)
+    ) {
+        alert(
+            "Daily price must be zero or greater, or left blank."
+        );
+        return;
+    }
+
+    // Prevent duplicate registration numbers in the current page.
+    for (const row of tableBody.querySelectorAll("tr")) {
         const existingRegistration =
             row.cells[1].textContent.trim().toUpperCase();
 
-        if (row !== editingRow &&
-            existingRegistration === registration) {
-            alert("A vehicle with this registration number already exists.");
+        if (
+            row !== editingRow &&
+            existingRegistration === registration
+        ) {
+            alert(
+                "A vehicle with this registration number already exists."
+            );
             return;
         }
     }
 
+    const wasEditing = Boolean(editingRow);
+
     let row = editingRow;
 
-    // If we are adding, create a new row with seven cells.
+    // Create a new row if this is an Add operation.
     if (!row) {
         row = document.createElement("tr");
 
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < 9; i++) {
             row.appendChild(document.createElement("td"));
         }
 
         tableBody.appendChild(row);
     }
 
+    // Update visible table cells.
     row.cells[0].textContent = name;
     row.cells[1].textContent = registration;
     row.cells[2].textContent = category;
+
     row.cells[3].textContent =
-        `₹${price.toLocaleString("en-IN")}`;
-    row.cells[4].textContent = fuel;
+        providerNames[providerId] || providerId;
 
-    updateStatusBadge(row, status);
+    row.cells[4].textContent =
+        branchNames[branchId] || branchId;
 
-    // Rebuild the action buttons consistently.
+    row.cells[5].textContent =
+        `₹${hourlyPrice.toLocaleString("en-IN")}`;
+
+    row.cells[6].textContent = fuel;
+
+    setStatusBadge(row, status);
+
+    // Store additional attributes on the row for editing.
+    // These are temporary frontend values, not database records.
+    Object.assign(row.dataset, {
+        brand,
+        model,
+        year: String(year),
+        seats: String(seats),
+        hourlyPrice: String(hourlyPrice),
+        dailyPrice:
+            dailyPrice === "" ? "" : String(dailyPrice),
+        providerId,
+        branchId,
+        verification,
+        gps
+    });
+
     setupActionButtons();
 
     closeVehicleForm();
     filterVehicles();
 
     alert(
-        editingRow
+        wasEditing
             ? "Vehicle details updated successfully!"
             : "Vehicle added successfully!"
     );
