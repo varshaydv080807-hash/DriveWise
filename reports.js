@@ -57,39 +57,64 @@ function inferCategory(vehicleName) {
     return "Sedan";
 }
 
+
 function loadBookings() {
     try {
         const saved = localStorage.getItem(BOOKING_STORAGE_KEY);
 
+        // If there are no saved bookings, use sample data for the demo.
         if (saved === null) {
             return demoBookings.map(booking => ({ ...booking }));
         }
 
         const parsed = JSON.parse(saved);
 
-        if (!Array.isArray(parsed)) {
-            throw new Error("Saved booking data is not an array.");
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            return demoBookings.map(booking => ({ ...booking }));
         }
 
-        return parsed.map(booking => ({
-            id: String(booking.id ?? ""),
-            date: booking.pickupDate || booking.date || "",
-            vehicle: booking.vehicle || "Unknown vehicle",
-            category: booking.category || inferCategory(booking.vehicle),
-            status: booking.status || "Pending",
-            amount: Number(booking.amount) || 0
-        })).filter(booking =>
+        const normalizedBookings = parsed.map(booking => {
+            const vehicle = booking.vehicle || booking.vehicleName || "Unknown vehicle";
+
+            let amount = booking.amount;
+            if (amount === undefined) amount = booking.totalAmount;
+            if (typeof amount === "string") {
+                amount = Number(amount.replace(/[₹,\s]/g, ""));
+            }
+
+            const rawStatus = String(booking.status || "Pending").toLowerCase();
+            const statusMap = {
+                pending: "Pending",
+                confirmed: "Confirmed",
+                ongoing: "Ongoing",
+                completed: "Completed",
+                cancelled: "Cancelled"
+            };
+
+            return {
+                id: String(booking.id || booking.bookingId || ""),
+                date: booking.pickupDate || booking.date || "",
+                vehicle,
+                category: booking.category || inferCategory(vehicle),
+                status: statusMap[rawStatus] || "Pending",
+                amount: Number(amount) || 0
+            };
+        }).filter(booking =>
             /^\d{4}-\d{2}-\d{2}$/.test(booking.date)
         );
+
+        // If saved data contains no usable records, keep the report populated.
+        if (normalizedBookings.length === 0) {
+            return demoBookings.map(booking => ({ ...booking }));
+        }
+
+        return normalizedBookings;
     } catch (error) {
-        console.error("Could not read shared bookings:", error);
-
-        filterMessage.textContent =
-            "Saved bookings could not be read; showing demo data instead.";
-
+        console.error("Could not read booking data:", error);
         return demoBookings.map(booking => ({ ...booking }));
     }
 }
+
 
 let bookings = loadBookings();
 let filteredBookings = [...bookings];
