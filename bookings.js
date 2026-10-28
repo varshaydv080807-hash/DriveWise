@@ -1,43 +1,95 @@
+
 const bookingTableBody = document.getElementById("bookingTableBody");
 const bookingSearch = document.getElementById("bookingSearch");
 const bookingStatusFilter = document.getElementById("bookingStatusFilter");
-
 const bookingFormPanel = document.getElementById("bookingFormPanel");
 const bookingForm = document.getElementById("bookingForm");
 const bookingFormTitle = document.getElementById("bookingFormTitle");
-
 const openBookingFormButton = document.getElementById("openBookingForm");
 const closeBookingFormButton = document.getElementById("closeBookingForm");
 const cancelBookingFormButton = document.getElementById("cancelBookingForm");
 
-const fields = {
-    id: document.getElementById("bookingId"),
-    customer: document.getElementById("bookingCustomer"),
-    vehicle: document.getElementById("bookingVehicle"),
-    pickupBranch: document.getElementById("pickupBranch"),
-    returnBranch: document.getElementById("returnBranch"),
-    pickupDate: document.getElementById("pickupDate"),
-    returnDate: document.getElementById("returnDate"),
-    amount: document.getElementById("bookingAmount"),
-    status: document.getElementById("bookingStatus")
-};
-
+const BOOKING_STORAGE_KEY = "driveWiseBookings";
 let editingBookingRow = null;
 
-// Map each booking status to an existing stylesheet class.
 function bookingStatusClass(status) {
-    const classes = {
+    return {
         Pending: "pending",
         Confirmed: "confirmed",
         Ongoing: "confirmed",
         Completed: "completed",
         Cancelled: "cancelled"
-    };
-
-    return classes[status] || "pending";
+    }[status] || "pending";
 }
 
-// Update the booking summary cards.
+function getRowBooking(row) {
+    return {
+        id: row.cells[0].textContent.trim(),
+        customer: row.cells[1].textContent.trim(),
+        vehicle: row.cells[2].textContent.trim(),
+        pickupDate: row.cells[3].textContent.trim(),
+        returnDate: row.cells[4].textContent.trim(),
+        amount: Number(
+            row.cells[5].textContent.replace(/[^0-9.]/g, "")
+        ) || 0,
+        status: row.cells[6].textContent.trim()
+    };
+}
+
+function getAllBookings() {
+    return Array.from(bookingTableBody.querySelectorAll("tr"))
+        .map(getRowBooking);
+}
+
+function saveBookings() {
+    try {
+        localStorage.setItem(
+            BOOKING_STORAGE_KEY,
+            JSON.stringify(getAllBookings())
+        );
+        return true;
+    } catch (error) {
+        console.error("Could not save DriveWise bookings:", error);
+        alert("Bookings could not be saved in this browser.");
+        return false;
+    }
+}
+
+function renderBookingRows(bookings) {
+    bookingTableBody.replaceChildren();
+
+    bookings.forEach(booking => {
+        const row = document.createElement("tr");
+
+        const values = [
+            booking.id,
+            booking.customer,
+            booking.vehicle,
+            booking.pickupDate,
+            booking.returnDate,
+            `₹${Number(booking.amount).toLocaleString("en-IN")}`
+        ];
+
+        values.forEach(value => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.appendChild(cell);
+        });
+
+        const statusCell = document.createElement("td");
+        const badge = document.createElement("span");
+
+        badge.className = `status ${bookingStatusClass(booking.status)}`;
+        badge.textContent = booking.status;
+
+        statusCell.appendChild(badge);
+        row.appendChild(statusCell);
+        row.appendChild(document.createElement("td"));
+
+        bookingTableBody.appendChild(row);
+    });
+}
+
 function updateBookingSummary() {
     const rows = Array.from(bookingTableBody.querySelectorAll("tr"));
 
@@ -49,69 +101,73 @@ function updateBookingSummary() {
         Completed: 0
     };
 
-    rows.forEach(function (row) {
-        const status = row.cells[8].textContent.trim();
+    rows.forEach(row => {
+        const status = row.cells[6].textContent.trim();
 
-        if (Object.prototype.hasOwnProperty.call(counts, status)) {
+        if (Object.hasOwn(counts, status)) {
             counts[status]++;
         }
     });
 
-    document.getElementById("pendingBookings").textContent = counts.Pending;
-    document.getElementById("confirmedBookings").textContent = counts.Confirmed;
-    document.getElementById("completedBookings").textContent = counts.Completed;
+    document.getElementById("pendingBookings").textContent =
+        counts.Pending;
+
+    document.getElementById("confirmedBookings").textContent =
+        counts.Confirmed;
+
+    document.getElementById("completedBookings").textContent =
+        counts.Completed;
 }
 
-// Search bookings and apply the selected status filter.
-function filterBookings() {
-    const searchText = bookingSearch.value.toLowerCase().trim();
-    const selectedStatus = bookingStatusFilter.value.toLowerCase();
-
-    bookingTableBody.querySelectorAll("tr").forEach(function (row) {
-        const searchableText = [
-            row.cells[0].textContent,
-            row.cells[1].textContent,
-            row.cells[2].textContent,
-            row.cells[3].textContent,
-            row.cells[4].textContent
-        ].join(" ").toLowerCase();
-
-        const status = row.cells[8].textContent.trim().toLowerCase();
-
-        const matchesSearch = searchableText.includes(searchText);
-        const matchesStatus =
-            selectedStatus === "" || status === selectedStatus;
-
-        row.style.display =
-            matchesSearch && matchesStatus ? "" : "none";
-    });
-
-    updateBookingSummary();
-}
-
-// Add Edit and Cancel buttons to each booking row.
 function setupBookingButtons() {
-    bookingTableBody.querySelectorAll("tr").forEach(function (row) {
-        const actionsCell = row.cells[9];
+    bookingTableBody.querySelectorAll("tr").forEach(row => {
+        const actionsCell = row.cells[7];
         actionsCell.replaceChildren();
 
         const editButton = document.createElement("button");
+
         editButton.type = "button";
         editButton.className = "action-btn";
         editButton.dataset.action = "edit";
         editButton.textContent = "Edit";
 
         const cancelButton = document.createElement("button");
+
         cancelButton.type = "button";
         cancelButton.className = "action-btn delete-btn";
         cancelButton.dataset.action = "cancel";
         cancelButton.textContent = "Cancel";
 
+        cancelButton.disabled =
+            row.cells[6].textContent.trim() === "Cancelled";
+
         actionsCell.append(editButton, cancelButton);
     });
 }
 
-// Open the form to create a new booking.
+function filterBookings() {
+    const searchText = bookingSearch.value.toLowerCase().trim();
+    const selectedStatus = bookingStatusFilter.value.toLowerCase();
+
+    bookingTableBody.querySelectorAll("tr").forEach(row => {
+        const searchableText = [
+            row.cells[0],
+            row.cells[1],
+            row.cells[2]
+        ].map(cell => cell.textContent).join(" ").toLowerCase();
+
+        const status = row.cells[6].textContent.trim().toLowerCase();
+
+        row.style.display =
+            searchableText.includes(searchText) &&
+            (!selectedStatus || status === selectedStatus)
+                ? ""
+                : "none";
+    });
+
+    updateBookingSummary();
+}
+
 function openBookingForm() {
     editingBookingRow = null;
     bookingForm.reset();
@@ -125,57 +181,14 @@ function openBookingForm() {
     });
 }
 
-// Close and reset the form.
 function closeBookingForm() {
     bookingFormPanel.hidden = true;
     bookingForm.reset();
-
     editingBookingRow = null;
+
     bookingFormTitle.textContent = "Add New Booking";
 }
 
-// Fill the form with the selected booking's current information.
-function setFormFromRow(row) {
-    fields.id.value = row.cells[0].textContent.trim();
-    fields.customer.value = row.cells[1].textContent.trim();
-    fields.vehicle.value = row.cells[2].textContent.trim();
-    fields.pickupBranch.value = row.cells[3].textContent.trim();
-    fields.returnBranch.value = row.cells[4].textContent.trim();
-    fields.pickupDate.value = row.cells[5].textContent.trim();
-    fields.returnDate.value = row.cells[6].textContent.trim();
-
-    fields.amount.value = row.cells[7].textContent
-        .replace(/[₹,]/g, "")
-        .trim();
-
-    fields.status.value = row.cells[8].textContent.trim();
-}
-
-// Display the updated information in a table row.
-function renderBookingRow(row, booking) {
-    const values = [
-        booking.id,
-        booking.customer,
-        booking.vehicle,
-        booking.pickupBranch,
-        booking.returnBranch,
-        booking.pickupDate,
-        booking.returnDate,
-        `₹${booking.amount.toLocaleString("en-IN")}`
-    ];
-
-    values.forEach(function (value, index) {
-        row.cells[index].textContent = value;
-    });
-
-    const badge = document.createElement("span");
-    badge.className = `status ${bookingStatusClass(booking.status)}`;
-    badge.textContent = booking.status;
-
-    row.cells[8].replaceChildren(badge);
-}
-
-// Connect the form controls.
 openBookingFormButton.addEventListener("click", openBookingForm);
 closeBookingFormButton.addEventListener("click", closeBookingForm);
 cancelBookingFormButton.addEventListener("click", closeBookingForm);
@@ -183,20 +196,38 @@ cancelBookingFormButton.addEventListener("click", closeBookingForm);
 bookingSearch.addEventListener("input", filterBookings);
 bookingStatusFilter.addEventListener("change", filterBookings);
 
-// Handle Edit and Cancel actions.
-bookingTableBody.addEventListener("click", function (event) {
+bookingTableBody.addEventListener("click", event => {
     const button = event.target.closest("button[data-action]");
 
     if (!button) return;
 
     const row = button.closest("tr");
-
     if (!row) return;
 
     if (button.dataset.action === "edit") {
         editingBookingRow = row;
 
-        setFormFromRow(row);
+        document.getElementById("bookingId").value =
+            row.cells[0].textContent.trim();
+
+        document.getElementById("bookingCustomer").value =
+            row.cells[1].textContent.trim();
+
+        document.getElementById("bookingVehicle").value =
+            row.cells[2].textContent.trim();
+
+        document.getElementById("pickupDate").value =
+            row.cells[3].textContent.trim();
+
+        document.getElementById("returnDate").value =
+            row.cells[4].textContent.trim();
+
+        document.getElementById("bookingAmount").value =
+            row.cells[5].textContent.replace(/[^0-9.]/g, "");
+
+        document.getElementById("bookingStatus").value =
+            row.cells[6].textContent.trim();
+
         bookingFormTitle.textContent = "Edit Booking";
         bookingFormPanel.hidden = false;
 
@@ -208,93 +239,132 @@ bookingTableBody.addEventListener("click", function (event) {
 
     if (button.dataset.action === "cancel") {
         const bookingId = row.cells[0].textContent.trim();
-        const currentStatus = row.cells[8].textContent.trim();
 
-        if (currentStatus === "Completed") {
+        if (row.cells[6].textContent.trim() === "Completed") {
             alert("A completed booking cannot be cancelled.");
             return;
         }
 
-        if (currentStatus === "Cancelled") {
-            alert("This booking is already cancelled.");
-            return;
-        }
-
-        const confirmed = confirm(`Cancel booking ${bookingId}?`);
-
-        if (!confirmed) return;
+        if (!confirm(`Cancel booking ${bookingId}?`)) return;
 
         const badge = document.createElement("span");
+
         badge.className = "status cancelled";
         badge.textContent = "Cancelled";
 
-        row.cells[8].replaceChildren(badge);
+        row.cells[6].replaceChildren(badge);
+
+        if (!saveBookings()) return;
 
         setupBookingButtons();
         filterBookings();
     }
 });
 
-// Validate and save a new or edited booking.
-bookingForm.addEventListener("submit", function (event) {
+bookingForm.addEventListener("submit", event => {
     event.preventDefault();
 
-    const booking = {
-        id: fields.id.value.trim().toUpperCase(),
-        customer: fields.customer.value.trim(),
-        vehicle: fields.vehicle.value.trim(),
-        pickupBranch: fields.pickupBranch.value,
-        returnBranch: fields.returnBranch.value,
-        pickupDate: fields.pickupDate.value,
-        returnDate: fields.returnDate.value,
-        amount: Number(fields.amount.value),
-        status: fields.status.value
-    };
+    const id = document.getElementById("bookingId")
+        .value.trim().toUpperCase();
 
-    // Validate rental dates.
-    if (booking.returnDate < booking.pickupDate) {
+    const customer = document.getElementById("bookingCustomer")
+        .value.trim();
+
+    const vehicle = document.getElementById("bookingVehicle")
+        .value.trim();
+
+    const pickupDate = document.getElementById("pickupDate").value;
+    const returnDate = document.getElementById("returnDate").value;
+
+    const amount = Number(
+        document.getElementById("bookingAmount").value
+    );
+
+    const status = document.getElementById("bookingStatus").value;
+
+    if (returnDate < pickupDate) {
         alert("Return date cannot be earlier than pickup date.");
         return;
     }
 
-    // Validate the amount.
-    if (!Number.isFinite(booking.amount) || booking.amount <= 0) {
-        alert("Enter a valid booking amount greater than zero.");
+    if (!Number.isFinite(amount) || amount <= 0) {
+        alert("Enter a valid booking amount.");
         return;
     }
 
-    // Prevent duplicate booking IDs.
-    for (const row of bookingTableBody.querySelectorAll("tr")) {
-        const existingId = row.cells[0].textContent.trim().toUpperCase();
+    const duplicate = Array.from(bookingTableBody.rows).some(row =>
+        row !== editingBookingRow &&
+        row.cells[0].textContent.trim().toUpperCase() === id
+    );
 
-        if (row !== editingBookingRow && existingId === booking.id) {
-            alert("This booking ID already exists.");
-            return;
-        }
+    if (duplicate) {
+        alert("This booking ID already exists.");
+        return;
     }
 
     let row = editingBookingRow;
 
-    // Create a new table row if this is a new booking.
     if (!row) {
         row = document.createElement("tr");
 
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 8; i++) {
             row.appendChild(document.createElement("td"));
         }
 
         bookingTableBody.appendChild(row);
     }
 
-    renderBookingRow(row, booking);
+    [
+        id,
+        customer,
+        vehicle,
+        pickupDate,
+        returnDate,
+        `₹${amount.toLocaleString("en-IN")}`
+    ].forEach((value, index) => {
+        row.cells[index].textContent = value;
+    });
+
+    const badge = document.createElement("span");
+
+    badge.className = `status ${bookingStatusClass(status)}`;
+    badge.textContent = status;
+
+    row.cells[6].replaceChildren(badge);
+
+    if (!saveBookings()) return;
 
     setupBookingButtons();
     closeBookingForm();
     filterBookings();
 
-    alert("Booking saved successfully in this demo.");
+    alert("Booking saved successfully!");
 });
 
-// Initialize the page.
+// Restore saved bookings on page load.
+try {
+    const saved = localStorage.getItem(BOOKING_STORAGE_KEY);
+
+    if (saved !== null) {
+        const parsed = JSON.parse(saved);
+
+        if (!Array.isArray(parsed)) {
+            throw new Error("Invalid saved booking data.");
+        }
+
+        renderBookingRows(parsed);
+    } else {
+        // Save the sample bookings already present in the HTML.
+        saveBookings();
+    }
+} catch (error) {
+    console.error("Could not load saved bookings:", error);
+
+    alert(
+        "Saved bookings could not be loaded. " +
+        "The page will use its initial sample data."
+    );
+}
+
 setupBookingButtons();
 filterBookings();
