@@ -1,54 +1,118 @@
 
-const bookings = [
-    { id: 101, date: "2026-01-05", category: "Sedan", status: "Completed", amount: 8000 },
-    { id: 102, date: "2026-01-12", category: "SUV", status: "Completed", amount: 12000 },
-    { id: 103, date: "2026-01-20", category: "Bike", status: "Cancelled", amount: 2000 },
-    { id: 104, date: "2026-02-04", category: "Hatchback", status: "Completed", amount: 5000 },
-    { id: 105, date: "2026-02-10", category: "SUV", status: "Confirmed", amount: 10000 },
-    { id: 106, date: "2026-02-18", category: "Sedan", status: "Completed", amount: 7500 },
-    { id: 107, date: "2026-03-03", category: "Bike", status: "Completed", amount: 2500 },
-    { id: 108, date: "2026-03-11", category: "Hatchback", status: "Cancelled", amount: 4000 },
-    { id: 109, date: "2026-03-15", category: "SUV", status: "Completed", amount: 15000 },
-    { id: 110, date: "2026-04-02", category: "Sedan", status: "Confirmed", amount: 9000 },
-    { id: 111, date: "2026-04-12", category: "Bike", status: "Completed", amount: 3000 },
-    { id: 112, date: "2026-04-22", category: "SUV", status: "Completed", amount: 14000 },
-    { id: 113, date: "2026-05-06", category: "Hatchback", status: "Completed", amount: 6000 },
-    { id: 114, date: "2026-05-14", category: "Sedan", status: "Cancelled", amount: 7000 },
-    { id: 115, date: "2026-05-25", category: "SUV", status: "Completed", amount: 16000 },
-    { id: 116, date: "2026-06-08", category: "Bike", status: "Confirmed", amount: 3500 },
-    { id: 117, date: "2026-06-16", category: "Hatchback", status: "Completed", amount: 5500 },
-    { id: 118, date: "2026-06-24", category: "Sedan", status: "Completed", amount: 8500 }
-];
+const BOOKING_STORAGE_KEY = "driveWiseBookings";
 
 const startDate = document.getElementById("start-date");
 const endDate = document.getElementById("end-date");
-
 const totalRevenue = document.getElementById("total-revenue");
 const totalBookings = document.getElementById("total-bookings");
 const completedBookings = document.getElementById("completed-bookings");
 const averageBooking = document.getElementById("average-booking");
-
 const revenueChart = document.getElementById("revenue-chart");
 const statusBreakdown = document.getElementById("status-breakdown");
 const categoryTable = document.getElementById("category-table");
 const filterMessage = document.getElementById("filter-message");
 
-const currency = amount =>
-    "₹" + amount.toLocaleString("en-IN");
+const demoBookings = [
+    { id: "101", date: "2026-01-05", vehicle: "Hyundai Verna", category: "Sedan", status: "Completed", amount: 8000 },
+    { id: "102", date: "2026-01-12", vehicle: "Hyundai Creta", category: "SUV", status: "Completed", amount: 12000 },
+    { id: "103", date: "2026-01-20", vehicle: "Honda Activa", category: "Bike", status: "Cancelled", amount: 2000 },
+    { id: "104", date: "2026-02-04", vehicle: "Maruti Swift", category: "Hatchback", status: "Completed", amount: 5000 },
+    { id: "105", date: "2026-02-10", vehicle: "Kia Seltos", category: "SUV", status: "Confirmed", amount: 10000 },
+    { id: "106", date: "2026-02-18", vehicle: "Honda City", category: "Sedan", status: "Completed", amount: 7500 },
+    { id: "107", date: "2026-03-03", vehicle: "Royal Enfield Classic", category: "Bike", status: "Completed", amount: 2500 },
+    { id: "108", date: "2026-03-11", vehicle: "Maruti Baleno", category: "Hatchback", status: "Cancelled", amount: 4000 },
+    { id: "109", date: "2026-03-15", vehicle: "Hyundai Creta", category: "SUV", status: "Completed", amount: 15000 },
+    { id: "110", date: "2026-04-02", vehicle: "Honda City", category: "Sedan", status: "Confirmed", amount: 9000 },
+    { id: "111", date: "2026-04-12", vehicle: "Honda Activa", category: "Bike", status: "Completed", amount: 3000 },
+    { id: "112", date: "2026-04-22", vehicle: "Kia Seltos", category: "SUV", status: "Completed", amount: 14000 },
+    { id: "113", date: "2026-05-06", vehicle: "Maruti Swift", category: "Hatchback", status: "Completed", amount: 6000 },
+    { id: "114", date: "2026-05-14", vehicle: "Hyundai Verna", category: "Sedan", status: "Cancelled", amount: 7000 },
+    { id: "115", date: "2026-05-25", vehicle: "Hyundai Creta", category: "SUV", status: "Completed", amount: 16000 },
+    { id: "116", date: "2026-06-08", vehicle: "Royal Enfield Classic", category: "Bike", status: "Confirmed", amount: 3500 },
+    { id: "117", date: "2026-06-16", vehicle: "Maruti Baleno", category: "Hatchback", status: "Completed", amount: 5500 },
+    { id: "118", date: "2026-06-24", vehicle: "Honda City", category: "Sedan", status: "Completed", amount: 8500 }
+];
 
+const currency = amount =>
+    "₹" + Number(amount).toLocaleString("en-IN");
+
+function inferCategory(vehicleName) {
+    const name = String(vehicleName || "").toLowerCase();
+
+    if (/bike|scooter|activa|classic|bullet|scooty|motorcycle/.test(name))
+        return "Bike";
+
+    if (/suv|creta|seltos|fortuner|thar|scorpio|xuv|brezza/.test(name))
+        return "SUV";
+
+    if (/swift|baleno|wagon|hatch|i10|i20|alto/.test(name))
+        return "Hatchback";
+
+    if (/bus|truck/.test(name))
+        return /bus/.test(name) ? "Bus" : "Truck";
+
+    if (/bicycle|cycle/.test(name))
+        return "Bicycle";
+
+    return "Sedan";
+}
+
+function loadBookings() {
+    try {
+        const saved = localStorage.getItem(BOOKING_STORAGE_KEY);
+
+        if (saved === null) {
+            return demoBookings.map(booking => ({ ...booking }));
+        }
+
+        const parsed = JSON.parse(saved);
+
+        if (!Array.isArray(parsed)) {
+            throw new Error("Saved booking data is not an array.");
+        }
+
+        return parsed.map(booking => ({
+            id: String(booking.id ?? ""),
+            date: booking.pickupDate || booking.date || "",
+            vehicle: booking.vehicle || "Unknown vehicle",
+            category: booking.category || inferCategory(booking.vehicle),
+            status: booking.status || "Pending",
+            amount: Number(booking.amount) || 0
+        })).filter(booking =>
+            /^\d{4}-\d{2}-\d{2}$/.test(booking.date)
+        );
+    } catch (error) {
+        console.error("Could not read shared bookings:", error);
+
+        filterMessage.textContent =
+            "Saved bookings could not be read; showing demo data instead.";
+
+        return demoBookings.map(booking => ({ ...booking }));
+    }
+}
+
+let bookings = loadBookings();
 let filteredBookings = [...bookings];
 
 function getCompleted(list) {
-    return list.filter(
-        booking => booking.status === "Completed"
-    );
+    return list.filter(booking => booking.status === "Completed");
+}
+
+function createElement(tag, className, text) {
+    const element = document.createElement(tag);
+
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = text;
+
+    return element;
 }
 
 function renderSummary(list) {
     const completed = getCompleted(list);
 
     const revenue = completed.reduce(
-        (sum, booking) => sum + booking.amount, 0
+        (sum, booking) => sum + booking.amount,
+        0
     );
 
     totalRevenue.textContent = currency(revenue);
@@ -61,53 +125,78 @@ function renderSummary(list) {
 }
 
 function renderRevenueChart(list) {
+    revenueChart.replaceChildren();
+
     const monthlyRevenue = {};
 
     list.forEach(booking => {
         if (booking.status !== "Completed") return;
 
         const month = booking.date.slice(0, 7);
+
         monthlyRevenue[month] =
             (monthlyRevenue[month] || 0) + booking.amount;
     });
 
     const months = Object.keys(monthlyRevenue).sort();
 
-    if (months.length === 0) {
-        revenueChart.innerHTML =
-            '<p class="empty-message">No completed revenue for this period.</p>';
+    if (!months.length) {
+        revenueChart.appendChild(
+            createElement(
+                "p",
+                "empty-message",
+                "No completed revenue for this period."
+            )
+        );
         return;
     }
 
-    const maxRevenue = Math.max(...Object.values(monthlyRevenue), 1);
+    const maxRevenue = Math.max(
+        ...Object.values(monthlyRevenue),
+        1
+    );
 
-    revenueChart.innerHTML = months.map(month => {
+    months.forEach(month => {
         const amount = monthlyRevenue[month];
-        const width = (amount / maxRevenue) * 100;
 
-        const label = new Date(
-            month + "-01T12:00:00"
-        ).toLocaleDateString("en-IN", {
-            month: "short",
-            year: "2-digit"
-        });
+        const label = new Date(`${month}-01T12:00:00`)
+            .toLocaleDateString("en-IN", {
+                month: "short",
+                year: "2-digit"
+            });
 
-        return `
-            <div class="chart-row">
-                <span class="chart-month">${label}</span>
-                <div class="chart-track">
-                    <div class="chart-bar" style="width: ${width}%"></div>
-                </div>
-                <span class="chart-value">${currency(amount)}</span>
-            </div>
-        `;
-    }).join("");
+        const row = createElement("div", "chart-row");
+        row.appendChild(createElement("span", "chart-month", label));
+
+        const track = createElement("div", "chart-track");
+        const bar = createElement("div", "chart-bar");
+
+        bar.style.width = `${(amount / maxRevenue) * 100}%`;
+        bar.title = currency(amount);
+
+        track.appendChild(bar);
+        row.appendChild(track);
+
+        row.appendChild(
+            createElement("span", "chart-value", currency(amount))
+        );
+
+        revenueChart.appendChild(row);
+    });
 }
 
 function renderStatusBreakdown(list) {
-    const statuses = ["Completed", "Confirmed", "Cancelled"];
+    statusBreakdown.replaceChildren();
 
-    statusBreakdown.innerHTML = statuses.map(status => {
+    const statuses = [
+        "Pending",
+        "Confirmed",
+        "Ongoing",
+        "Completed",
+        "Cancelled"
+    ];
+
+    statuses.forEach(status => {
         const count = list.filter(
             booking => booking.status === status
         ).length;
@@ -116,29 +205,45 @@ function renderStatusBreakdown(list) {
             ? (count / list.length) * 100
             : 0;
 
-        return `
-            <div class="breakdown-item">
-                <div class="breakdown-label">
-                    <span class="status status-${status.toLowerCase()}">
-                        ${status}
-                    </span>
-                    <strong>${count}</strong>
-                </div>
-                <div class="breakdown-track">
-                    <div class="breakdown-fill"
-                         style="width: ${percentage}%"></div>
-                </div>
-            </div>
-        `;
-    }).join("");
+        const item = createElement("div", "breakdown-item");
+        const label = createElement("div", "breakdown-label");
+
+        const badge = createElement(
+            "span",
+            `status ${status.toLowerCase()}`,
+            status
+        );
+
+        label.append(
+            badge,
+            createElement("strong", "", String(count))
+        );
+
+        const track = createElement("div", "breakdown-track");
+        const fill = createElement("div", "breakdown-fill");
+
+        fill.style.width = `${percentage}%`;
+
+        track.appendChild(fill);
+        item.append(label, track);
+        statusBreakdown.appendChild(item);
+    });
 }
 
 function renderCategoryTable(list) {
-    const categories = [...new Set(
-        bookings.map(booking => booking.category)
-    )].sort();
+    categoryTable.replaceChildren();
 
-    categoryTable.innerHTML = categories.map(category => {
+    const categories = [
+        ...new Set([
+            ...list.map(booking => booking.category),
+            "Bike",
+            "Hatchback",
+            "Sedan",
+            "SUV"
+        ])
+    ].sort();
+
+    categories.forEach(category => {
         const categoryBookings = list.filter(
             booking => booking.category === category
         );
@@ -146,18 +251,25 @@ function renderCategoryTable(list) {
         const completed = getCompleted(categoryBookings);
 
         const revenue = completed.reduce(
-            (sum, booking) => sum + booking.amount, 0
+            (sum, booking) => sum + booking.amount,
+            0
         );
 
-        return `
-            <tr>
-                <td>${category}</td>
-                <td>${categoryBookings.length}</td>
-                <td>${completed.length}</td>
-                <td>${currency(revenue)}</td>
-            </tr>
-        `;
-    }).join("");
+        const row = document.createElement("tr");
+
+        [
+            category,
+            categoryBookings.length,
+            completed.length,
+            currency(revenue)
+        ].forEach(value => {
+            row.appendChild(
+                createElement("td", "", String(value))
+            );
+        });
+
+        categoryTable.appendChild(row);
+    });
 }
 
 function renderReport(list) {
@@ -174,20 +286,23 @@ function applyFilter() {
     if (from && to && from > to) {
         filterMessage.textContent =
             "The start date must be before or equal to the end date.";
+
         filterMessage.classList.add("error-message");
         return;
     }
 
-    filteredBookings = bookings.filter(booking => {
-        const afterStart = !from || booking.date >= from;
-        const beforeEnd = !to || booking.date <= to;
-
-        return afterStart && beforeEnd;
-    });
+    filteredBookings = bookings.filter(booking =>
+        (!from || booking.date >= from) &&
+        (!to || booking.date <= to)
+    );
 
     filterMessage.classList.remove("error-message");
+
     filterMessage.textContent =
-        `Showing ${filteredBookings.length} booking(s) for the selected period.`;
+        `Showing ${filteredBookings.length} booking(s) for the selected period` +
+        (localStorage.getItem(BOOKING_STORAGE_KEY) !== null
+            ? ". Data source: Booking Management."
+            : ". Data source: sample data.");
 
     renderReport(filteredBookings);
 }
@@ -195,10 +310,17 @@ function applyFilter() {
 function resetFilter() {
     startDate.value = "";
     endDate.value = "";
+
+    bookings = loadBookings();
     filteredBookings = [...bookings];
 
     filterMessage.classList.remove("error-message");
-    filterMessage.textContent = "Showing all available sample data.";
+
+    filterMessage.textContent =
+        `Showing all ${filteredBookings.length} booking(s). ` +
+        (localStorage.getItem(BOOKING_STORAGE_KEY) !== null
+            ? "Data source: Booking Management."
+            : "Data source: sample data.");
 
     renderReport(filteredBookings);
 }
@@ -206,7 +328,8 @@ function resetFilter() {
 function downloadCSV() {
     const headers = [
         "Booking ID",
-        "Date",
+        "Pickup Date",
+        "Vehicle",
         "Vehicle Category",
         "Status",
         "Amount (INR)"
@@ -215,6 +338,7 @@ function downloadCSV() {
     const rows = filteredBookings.map(booking => [
         booking.id,
         booking.date,
+        booking.vehicle,
         booking.category,
         booking.status,
         booking.amount
@@ -255,5 +379,11 @@ document.getElementById("reset-filter")
 document.getElementById("download-report")
     .addEventListener("click", downloadCSV);
 
-filterMessage.textContent = "Showing all available sample data.";
+const hasSavedBookings =
+    localStorage.getItem(BOOKING_STORAGE_KEY) !== null;
+
+filterMessage.textContent = hasSavedBookings
+    ? `Showing all ${bookings.length} booking(s). Data source: Booking Management.`
+    : `Showing all ${bookings.length} booking(s). Data source: sample data until bookings are saved.`;
+
 renderReport(filteredBookings);
