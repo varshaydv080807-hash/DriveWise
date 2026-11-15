@@ -1,45 +1,101 @@
+require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config();
-
-
+const pool = require("./config/db");
 
 const app = express();
+app.disable("x-powered-by");
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
-// Authentication Routes
-const authRoutes = require("./routes/authRoutes");
+app.use(cors({
+    origin(origin, callback) {
+        // Requests without an Origin header include curl, Postman and server-to-server calls.
+        const isDevelopment = process.env.NODE_ENV !== "production";
+        if (!origin || allowedOrigins.includes(origin) || (isDevelopment && allowedOrigins.length === 0)) {
+            return callback(null, true);
+        }
+        return callback(new Error("Origin is not allowed by CORS"));
+    },
+    credentials: true
+}));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-app.use("/api/auth", authRoutes);
-
-// Test route
-app.get("/", (req, res) => {
-    res.json({
-        message: "Welcome to DriveWise Backend!",
+app.get("/", (_req, res) => {
+    res.status(200).json({
+        success: true,
+        message: "Welcome to DriveWise Backend",
         status: "Server is running"
     });
 });
 
-
-
-// Vehicle Management Routes
-const vehicleRoutes = require("./routes/vehicleRoutes");
-
-app.use("/api/vehicles", vehicleRoutes);
-// User Profile Routes
-const userRoutes = require("./routes/userRoutes");
-app.use("/api/users", userRoutes);
-
-// Provider Routes
-const providerRoutes = require("./routes/providerRoutes");
-app.use("/api/providers", providerRoutes);
-// Server
-const PORT = process.env.PORT || 5001;
-
-app.listen(PORT, () => {
-    console.log(`DriveWise backend running on port ${PORT}`);
+app.get("/api/health", async (_req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT DATABASE() AS databaseName");
+        return res.status(200).json({
+            success: true,
+            status: "healthy",
+            database: rows[0].databaseName
+        });
+    } catch (_error) {
+        return res.status(503).json({
+            success: false,
+            status: "degraded",
+            database: "unavailable"
+        });
+    }
 });
+
+app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/users", require("./routes/userRoutes"));
+app.use("/api/providers", require("./routes/providerRoutes"));
+app.use("/api/vehicles", require("./routes/vehicleRoutes"));
+app.use("/api/admin", require("./routes/adminRoutes"));
+
+app.use((_req, res) => {
+    res.status(404).json({ success: false, message: "API route not found" });
+});
+
+app.use((error, _req, res, _next) => {
+    if (error.message === "Origin is not allowed by CORS") {
+        return res.status(403).json({ success: false, message: "Origin is not allowed" });
+    }
+    if (error.type === "entity.parse.failed") {
+        return res.status(400).json({ success: false, message: "Invalid JSON request body" });
+    }
+    if (error.type === "entity.too.large") {
+        return res.status(413).json({ success: false, message: "Request body is too large" });
+    }
+    console.error("Unhandled API error:", error);
+    return res.status(500).json({
+        success: false,
+        message: "Internal server error"
+    });
+});
+
+let server;
+if (require.main === module) {
+    const port = Number(process.env.PORT || 5001);
+    server = app.listen(port, () => {
+        console.log(`DriveWise backend running on port ${port}`);
+    });
+
+    const shutdown = (signal) => {
+        console.log(`${signal} received. Closing DriveWise backend...`);
+        if (!server) process.exit(0);
+        server.close(async () => {
+            try { await pool.end(); } catch (error) { console.error("Database pool shutdown error:", error.message); }
+            process.exit(0);
+        });
+        setTimeout(() => process.exit(1), 10000).unref();
+    };
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
+module.exports = app;
