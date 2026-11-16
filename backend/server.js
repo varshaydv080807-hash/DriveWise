@@ -55,6 +55,7 @@ app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/providers", require("./routes/providerRoutes"));
 app.use("/api/vehicles", require("./routes/vehicleRoutes"));
+app.use("/api/bookings", require("./routes/bookingRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 
 app.use((_req, res) => {
