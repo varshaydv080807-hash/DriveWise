@@ -4,13 +4,14 @@ const pool = require("../config/db");
 // ADD VEHICLE
 exports.addVehicle = async (req, res) => {
     try {
+        // Only Providers can add vehicles
         if (req.user.userRole !== "Provider") {
-    return res.status(403).json({
-        message: "Access denied. Only providers can add vehicles."
-    });
-}
+            return res.status(403).json({
+                message: "Access denied. Only providers can add vehicles."
+            });
+        }
+
         const {
-            providerId,
             typeId,
             homeBranchId,
             currentBranchId,
@@ -25,34 +26,38 @@ exports.addVehicle = async (req, res) => {
             longitude,
             locationUpdatedAt,
             pickupAddress,
-            city,
-            vehicleVerificationStatus
+            city
         } = req.body;
 
         // Required field validation
         if (
-            !providerId ||
             !typeId ||
             pricePerHour === undefined ||
             !status ||
             gpsEnabled === undefined
         ) {
             return res.status(400).json({
-                message: "Provider, vehicle type, price, status and GPS status are required"
+                message: "Vehicle type, price, status and GPS status are required"
             });
         }
-        const [providerRows] = await pool.execute(
-    `SELECT Provider_ID
-     FROM provider
-     WHERE Provider_ID = ? AND User_ID = ?`,
-    [providerId, req.user.userId]
-);
 
-if (providerRows.length === 0) {
-    return res.status(403).json({
-        message: "Access denied. You can only add vehicles to your own provider account."
-    });
-}
+        // Automatically identify the logged-in Provider
+        const [providerRows] = await pool.execute(
+            `SELECT Provider_ID
+             FROM provider
+             WHERE User_ID = ?`,
+            [req.user.userId]
+        );
+
+        if (providerRows.length === 0) {
+            return res.status(403).json({
+                message: "Provider profile not found"
+            });
+        }
+
+        const ownProviderId = providerRows[0].Provider_ID;
+
+        // Insert vehicle
         const sql = `
             INSERT INTO vehicle (
                 Provider_ID,
@@ -77,7 +82,7 @@ if (providerRows.length === 0) {
         `;
 
         const values = [
-            providerId,
+            ownProviderId,
             typeId,
             homeBranchId || null,
             currentBranchId || null,
@@ -93,7 +98,7 @@ if (providerRows.length === 0) {
             locationUpdatedAt || null,
             pickupAddress || null,
             city || null,
-            vehicleVerificationStatus || "Pending"
+            "Pending"
         ];
 
         const [result] = await pool.execute(sql, values);
@@ -111,6 +116,7 @@ if (providerRows.length === 0) {
         });
     }
 };
+
 
 // GET ALL VEHICLES
 exports.getAllVehicles = async (req, res) => {
@@ -154,28 +160,35 @@ exports.getAllVehicles = async (req, res) => {
         });
     }
 };
+
+
 // DELETE VEHICLE
 exports.deleteVehicle = async (req, res) => {
     try {
+        // Only Providers can delete vehicles
         if (req.user.userRole !== "Provider") {
-    return res.status(403).json({
-        message: "Access denied. Only providers can delete vehicles."
-    });
-}
-        const { id } = req.params;
-        const [vehicleRows] = await pool.execute(
-    `SELECT V.Vehicle_ID
-     FROM vehicle V
-     JOIN provider P ON V.Provider_ID = P.Provider_ID
-     WHERE V.Vehicle_ID = ? AND P.User_ID = ?`,
-    [id, req.user.userId]
-);
+            return res.status(403).json({
+                message: "Access denied. Only providers can delete vehicles."
+            });
+        }
 
-if (vehicleRows.length === 0) {
-    return res.status(403).json({
-        message: "Access denied. You can only delete your own vehicles."
-    });
-}
+        const { id } = req.params;
+
+        // Check vehicle ownership
+        const [vehicleRows] = await pool.execute(
+            `SELECT V.Vehicle_ID
+             FROM vehicle V
+             JOIN provider P ON V.Provider_ID = P.Provider_ID
+             WHERE V.Vehicle_ID = ? AND P.User_ID = ?`,
+            [id, req.user.userId]
+        );
+
+        if (vehicleRows.length === 0) {
+            return res.status(403).json({
+                message: "Access denied. You can only delete your own vehicles."
+            });
+        }
+
         const [result] = await pool.execute(
             "DELETE FROM vehicle WHERE Vehicle_ID = ?",
             [id]
@@ -199,28 +212,35 @@ if (vehicleRows.length === 0) {
         });
     }
 };
+
+
 // UPDATE VEHICLE
 exports.updateVehicle = async (req, res) => {
     try {
+        // Only Providers can update vehicles
         if (req.user.userRole !== "Provider") {
-    return res.status(403).json({
-        message: "Access denied. Only providers can update vehicles."
-    });
-}
-        const { id } = req.params;
-        const [vehicleRows] = await pool.execute(
-    `SELECT V.Vehicle_ID
-     FROM vehicle V
-     JOIN provider P ON V.Provider_ID = P.Provider_ID
-     WHERE V.Vehicle_ID = ? AND P.User_ID = ?`,
-    [id, req.user.userId]
-);
+            return res.status(403).json({
+                message: "Access denied. Only providers can update vehicles."
+            });
+        }
 
-if (vehicleRows.length === 0) {
-    return res.status(403).json({
-        message: "Access denied. You can only update your own vehicles."
-    });
-}
+        const { id } = req.params;
+
+        // Check vehicle ownership
+        const [vehicleRows] = await pool.execute(
+            `SELECT V.Vehicle_ID
+             FROM vehicle V
+             JOIN provider P ON V.Provider_ID = P.Provider_ID
+             WHERE V.Vehicle_ID = ? AND P.User_ID = ?`,
+            [id, req.user.userId]
+        );
+
+        if (vehicleRows.length === 0) {
+            return res.status(403).json({
+                message: "Access denied. You can only update your own vehicles."
+            });
+        }
+
         const {
             brand,
             model,

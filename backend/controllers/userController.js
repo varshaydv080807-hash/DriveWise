@@ -45,7 +45,11 @@ exports.updateUserProfile = async (req, res) => {
     });
 }
         const { name, phone, drivingLicense = null } = req.body || {};
-
+        if (!name || !phone) {
+    return res.status(400).json({
+        message: "Name and phone are required"
+    });
+}
         const [result] = await pool.execute(
             `UPDATE customer_user
              SET Name = ?, Phone = ?, Driving_License_No = ?
