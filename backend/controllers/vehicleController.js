@@ -184,10 +184,168 @@ exports.getAllVehicles = async (req, res) => {
 };
 
 
+// ==========================================
+// SMART VEHICLE RECOMMENDATION - FEATURE 3
+// ==========================================
+
+exports.getRecommendedVehicles = async (req, res) => {
+    try {
+        const {
+            city,
+            maxPrice,
+            category,
+            minSeats,
+            fuelType,
+            minRating
+        } = req.query;
+
+        const conditions = [
+            "V.Vehicle_Verification_Status = 'Verified'"
+        ];
+
+        const values = [];
+
+        // Budget filter
+        if (maxPrice !== undefined) {
+            const price = Number(maxPrice);
+
+            if (!Number.isFinite(price) || price < 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid maximum price"
+                });
+            }
+
+            conditions.push("V.Price_Per_Hour <= ?");
+            values.push(price);
+        }
+
+        // City filter
+        if (city) {
+            conditions.push("V.City LIKE ?");
+            values.push(`%${city.trim()}%`);
+        }
+
+        // Vehicle category filter
+        if (category) {
+            conditions.push("VT.Vehicle_Category = ?");
+            values.push(category.trim());
+        }
+
+        // Minimum seating capacity
+        if (minSeats !== undefined) {
+            const seats = Number(minSeats);
+
+            if (!Number.isInteger(seats) || seats < 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid seating capacity"
+                });
+            }
+
+            conditions.push("VT.Seating_Capacity >= ?");
+            values.push(seats);
+        }
+
+        // Fuel type filter
+        if (fuelType) {
+            conditions.push("VT.Fuel_Type = ?");
+            values.push(fuelType.trim());
+        }
+
+        // Minimum provider rating
+        if (minRating !== undefined) {
+            const rating = Number(minRating);
+
+            if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Rating must be between 0 and 5"
+                });
+            }
+
+            conditions.push("COALESCE(R.Avg_Rating, 0) >= ?");
+            values.push(rating);
+        }
+
+        const sql = `
+            SELECT
+                V.Vehicle_ID,
+                V.Provider_ID,
+                V.Type_ID,
+                V.Brand,
+                V.Model,
+                V.Manufacture_Year,
+                V.Price_Per_Hour,
+                V.Status,
+                V.City,
+                V.Pickup_Address,
+                V.Vehicle_Image_URL,
+                VT.Type_Name,
+                VT.Vehicle_Category,
+                VT.Seating_Capacity,
+                VT.Fuel_Type,
+                P.Display_Name AS Provider_Name,
+                COALESCE(R.Avg_Rating, 0) AS Provider_Rating,
+                COALESCE(R.Review_Count, 0) AS Provider_Review_Count
+
+            FROM vehicle V
+
+            LEFT JOIN vehicle_type VT
+                ON V.Type_ID = VT.Type_ID
+
+            LEFT JOIN provider P
+                ON V.Provider_ID = P.Provider_ID
+
+            LEFT JOIN (
+                SELECT
+                    Provider_ID,
+                    ROUND(AVG(Rating), 1) AS Avg_Rating,
+                    COUNT(*) AS Review_Count
+                FROM review
+                WHERE Review_Type = 'Customer_To_Provider'
+                GROUP BY Provider_ID
+            ) R ON V.Provider_ID = R.Provider_ID
+
+            WHERE ${conditions.join(" AND ")}
+
+            ORDER BY
+                Provider_Rating DESC,
+                Provider_Review_Count DESC,
+                V.Price_Per_Hour ASC
+        `;
+
+        const [vehicles] = await pool.execute(sql, values);
+
+        return res.status(200).json({
+            success: true,
+            message: "Vehicle recommendations fetched successfully",
+            count: vehicles.length,
+            filters: {
+                city: city || null,
+                maxPrice: maxPrice || null,
+                category: category || null,
+                minSeats: minSeats || null,
+                fuelType: fuelType || null,
+                minRating: minRating || null
+            },
+            recommendations: vehicles
+        });
+
+    } catch (error) {
+        console.error("Vehicle recommendation error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch vehicle recommendations"
+        });
+    }
+};
+
+
 // GET BOOKED TIME SLOTS (public)
 // Returns only vehicle ID and start/end times of upcoming Pending/Confirmed
 // bookings, so the customer portal can show which vehicles are free.
-// No customer details are exposed.
 exports.getBookedSlots = async (req, res) => {
     try {
         const [slots] = await pool.execute(
