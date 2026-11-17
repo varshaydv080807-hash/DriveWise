@@ -30,4 +30,17 @@ router.delete(
     vehicleController.deleteVehicle
 );
 
+router.get(
+    "/:id/location",
+    authMiddleware,
+    vehicleController.getVehicleLocation
+);
+
+router.put(
+    "/:id/location",
+    authMiddleware,
+    authorizeRoles("Provider"),
+    vehicleController.updateVehicleLocation
+);
+
 module.exports = router;
