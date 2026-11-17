@@ -200,7 +200,8 @@ exports.getRecommendedVehicles = async (req, res) => {
         } = req.query;
 
         const conditions = [
-            "V.Vehicle_Verification_Status = 'Verified'"
+            "V.Vehicle_Verification_Status = 'Verified'",
+            "V.Status = 'Available'"
         ];
 
         const values = [];
@@ -322,14 +323,14 @@ exports.getRecommendedVehicles = async (req, res) => {
             message: "Vehicle recommendations fetched successfully",
             count: vehicles.length,
             filters: {
-                city: city || null,
-                maxPrice: maxPrice || null,
-                category: category || null,
-                minSeats: minSeats || null,
-                fuelType: fuelType || null,
-                minRating: minRating || null
-            },
-            recommendations: vehicles
+            city: city || null,
+            maxPrice: maxPrice !== undefined ? Number(maxPrice) : null,
+            category: category || null,
+            minSeats: minSeats !== undefined ? Number(minSeats) : null,
+            fuelType: fuelType || null,
+            minRating: minRating !== undefined ? Number(minRating) : null
+        },
+        recommendations: vehicles
         });
 
     } catch (error) {
