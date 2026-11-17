@@ -266,6 +266,160 @@ exports.deleteVehicle = async (req, res) => {
     }
 };
 
+// GET VEHICLE GPS LOCATION
+
+exports.getVehicleLocation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.userId;
+        const userRole = req.user.userRole;
+
+        // Only Providers and Admins can access GPS coordinates
+        if (!["Provider", "Admin"].includes(userRole)) {
+            return res.status(403).json({
+                message: "Access denied. You cannot view vehicle GPS locations."
+            });
+        }
+
+        // Fetch vehicle and its provider ownership
+        const [vehicles] = await pool.execute(
+            `SELECT
+                V.Vehicle_ID,
+                V.Provider_ID,
+                P.User_ID,
+                V.GPS_Enabled,
+                V.Latitude,
+                V.Longitude,
+                V.Location_Updated_At
+             FROM vehicle V
+             JOIN provider P ON V.Provider_ID = P.Provider_ID
+             WHERE V.Vehicle_ID = ?`,
+            [id]
+        );
+
+        if (vehicles.length === 0) {
+            return res.status(404).json({
+                message: "Vehicle not found"
+            });
+        }
+
+        const vehicle = vehicles[0];
+
+        // Providers can only view their own vehicles
+        if (
+            userRole === "Provider" &&
+            Number(vehicle.User_ID) !== Number(userId)
+        ) {
+            return res.status(403).json({
+                message: "Access denied. You can only view your own vehicles."
+            });
+        }
+
+        if (!vehicle.GPS_Enabled) {
+            return res.status(400).json({
+                message: "GPS is disabled for this vehicle"
+            });
+        }
+
+        if (
+            vehicle.Latitude === null ||
+            vehicle.Longitude === null
+        ) {
+            return res.status(404).json({
+                message: "Vehicle location is not available"
+            });
+        }
+
+        return res.status(200).json({
+            message: "Vehicle location retrieved successfully",
+            location: {
+                vehicleId: vehicle.Vehicle_ID,
+                latitude: vehicle.Latitude,
+                longitude: vehicle.Longitude,
+                lastUpdated: vehicle.Location_Updated_At
+            }
+        });
+
+    } catch (error) {
+        console.error("Get vehicle location error:", error);
+
+        return res.status(500).json({
+            message: "Failed to retrieve vehicle location"
+        });
+    }
+};
+
+
+// UPDATE VEHICLE GPS LOCATION
+exports.updateVehicleLocation = async (req, res) => {
+    try {
+        if (req.user.userRole !== "Provider") {
+            return res.status(403).json({
+                message: "Access denied. Only providers can update GPS location."
+            });
+        }
+
+        const { id } = req.params;
+        const { latitude, longitude } = req.body;
+
+        if (
+            latitude === undefined ||
+            longitude === undefined ||
+            !Number.isFinite(Number(latitude)) ||
+            !Number.isFinite(Number(longitude)) ||
+            Number(latitude) < -90 ||
+            Number(latitude) > 90 ||
+            Number(longitude) < -180 ||
+            Number(longitude) > 180
+        ) {
+            return res.status(400).json({
+                message: "Valid latitude and longitude are required"
+            });
+        }
+
+        const [vehicles] = await pool.execute(
+            `SELECT V.Vehicle_ID, V.GPS_Enabled
+             FROM vehicle V
+             JOIN provider P ON V.Provider_ID = P.Provider_ID
+             WHERE V.Vehicle_ID = ?
+             AND P.User_ID = ?`,
+            [id, req.user.userId]
+        );
+
+        if (vehicles.length === 0) {
+            return res.status(403).json({
+                message: "Access denied. You can only update your own vehicles."
+            });
+        }
+
+        if (!vehicles[0].GPS_Enabled) {
+            return res.status(400).json({
+                message: "GPS is disabled for this vehicle"
+            });
+        }
+
+        await pool.execute(
+            `UPDATE vehicle
+             SET Latitude = ?,
+                 Longitude = ?,
+                 Location_Updated_At = CURRENT_TIMESTAMP
+             WHERE Vehicle_ID = ?`,
+            [Number(latitude), Number(longitude), id]
+        );
+
+        res.status(200).json({
+            message: "Vehicle GPS location updated successfully!"
+        });
+
+    } catch (error) {
+        console.error("Update vehicle location error:", error);
+
+        res.status(500).json({
+            message: "Failed to update vehicle location"
+        });
+    }
+};
+
 
 // UPDATE VEHICLE
 exports.updateVehicle = async (req, res) => {
