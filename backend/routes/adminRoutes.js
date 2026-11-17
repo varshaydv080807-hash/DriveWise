@@ -25,4 +25,11 @@ router.patch("/vehicles/:id/verification", adminController.updateVehicleVerifica
 router.get("/bookings", adminController.getAllBookings);
 router.get("/dashboard", adminController.getDashboardStats);
 
+// FEATURE 4: PROFITABILITY ANALYTICS
+
+router.get("/profitability/bookings", adminController.getBookingProfitability);
+
+router.get("/profitability/providers", adminController.getProviderProfitability);
+
+router.get("/profitability/monthly", adminController.getMonthlyProfitability);
 module.exports = router;

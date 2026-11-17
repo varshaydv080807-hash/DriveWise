@@ -176,3 +176,74 @@ exports.getDashboardStats = async (req, res) => {
         });
     }
 };
+
+// FEATURE 4: PROFITABILITY ANALYTICS
+
+// GET BOOKING-WISE PROFITABILITY SUMMARY
+exports.getBookingProfitability = async (req, res) => {
+    try {
+        const [bookings] = await pool.execute(`
+            SELECT *
+            FROM profitability_booking_summary_view
+            ORDER BY Booking_ID DESC
+        `);
+
+        res.status(200).json({
+            success: true,
+            count: bookings.length,
+            bookings
+        });
+    } catch (error) {
+        console.error("Booking profitability error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to retrieve booking profitability"
+        });
+    }
+};
+
+// GET PROVIDER-WISE PROFITABILITY SUMMARY
+exports.getProviderProfitability = async (req, res) => {
+    try {
+        const [providers] = await pool.execute(`
+            SELECT *
+            FROM profitability_provider_summary_view
+            ORDER BY Provider_ID
+        `);
+
+        res.status(200).json({
+            success: true,
+            count: providers.length,
+            providers
+        });
+    } catch (error) {
+        console.error("Provider profitability error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to retrieve provider profitability"
+        });
+    }
+};
+
+// GET MONTHLY PAYMENT SUMMARY
+exports.getMonthlyProfitability = async (req, res) => {
+    try {
+        const [monthlyData] = await pool.execute(`
+            SELECT *
+            FROM profitability_monthly_payment_view
+            ORDER BY Payment_Month
+        `);
+
+        res.status(200).json({
+            success: true,
+            count: monthlyData.length,
+            monthlyData
+        });
+    } catch (error) {
+        console.error("Monthly profitability error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to retrieve monthly profitability"
+        });
+    }
+};
