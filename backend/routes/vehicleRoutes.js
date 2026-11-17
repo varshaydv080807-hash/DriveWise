@@ -14,6 +14,10 @@ router.post(
 );
 
 router.get("/", vehicleController.getAllVehicles);
+router.get(
+    "/recommend",
+    vehicleController.getRecommendedVehicles
+);
 router.get("/booked-slots", vehicleController.getBookedSlots);
 
 router.put(
