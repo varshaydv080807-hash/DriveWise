@@ -20,7 +20,7 @@ This package covers the backend foundation, authentication, authorization, user/
 4. Configure either `DATABASE_URL` **or** the separate `DB_*` variables.
 5. Set a strong random `JWT_SECRET`.
 6. Keep `NODE_ENV=development` locally. Set `NODE_ENV=production` in Render.
-7. Run `npm run dev` for local development (uses Node.js built-in `--watch`; no nodemon dependency) or `npm start` for production.
+7. Run `npm run dev` for local development or `npm start` for production.
 
 Never commit `.env`, database passwords, JWT secrets, or access tokens.
 

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in — DriveWise</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="customer-portal.css">
+</head>
+<body class="auth-body">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="customer-portal.html" aria-label="DriveWise home">
+        <span class="plate plate-logo">DRIVE<span class="plate-gap"></span>WISE</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="auth-wrap" id="main">
+    <section class="panel auth-card" aria-labelledby="authTitle">
+      <div class="tabs auth-tabs" role="tablist" aria-label="Log in or create an account">
+        <button role="tab" class="tab" type="button" data-mode="login" aria-selected="true" id="tabLogin">Log in</button>
+        <button role="tab" class="tab" type="button" data-mode="signup" aria-selected="false" id="tabSignup">Create account</button>
+      </div>
+
+      <h1 id="authTitle">Welcome back</h1>
+      <p class="muted" id="authIntro">Log in to book vehicles and see your trips.</p>
+
+      <form id="loginForm" class="auth-form" novalidate>
+        <label class="field"><span class="field-label">Email</span>
+          <input name="email" type="email" autocomplete="email" required></label>
+        <label class="field"><span class="field-label">Password</span>
+          <input name="password" type="password" autocomplete="current-password" required></label>
+        <p class="form-error" role="alert" hidden></p>
+        <button class="btn btn-primary" type="submit">Log in</button>
+      </form>
+
+      <form id="signupForm" class="auth-form" novalidate hidden>
+        <label class="field"><span class="field-label">Full name</span>
+          <input name="name" autocomplete="name" maxlength="100" required></label>
+        <label class="field"><span class="field-label">Email</span>
+          <input name="email" type="email" autocomplete="email" maxlength="255" required></label>
+        <label class="field"><span class="field-label">Mobile number</span>
+          <input name="phone" type="tel" autocomplete="tel" placeholder="10-digit number" maxlength="13" required></label>
+        <label class="field"><span class="field-label">Driving licence number (optional, needed to book)</span>
+          <input name="drivingLicense" placeholder="e.g. DL-0420210012345" maxlength="50"></label>
+        <label class="field"><span class="field-label">Password (at least 8 characters)</span>
+          <input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+        <p class="form-error" role="alert" hidden></p>
+        <button class="btn btn-primary" type="submit">Create account</button>
+      </form>
+
+      <p class="muted small auth-note" id="authStatus" role="status"></p>
+      <a class="linkbtn" href="customer-portal.html">Continue browsing without logging in</a>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="login.js"></script>
+</body>
+</html>

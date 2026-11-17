@@ -1,25 +1,24 @@
-
 const express = require("express");
 const router = express.Router();
-
 const providerController = require("../controllers/providerController");
 const authMiddleware = require("../middleware/authMiddleware");
 
-// All provider routes require authentication
 router.use(authMiddleware);
 
-// Provider booking management
-router.get("/bookings", providerController.getProviderBookings);
-router.patch(
-    "/bookings/:id/status",
-    providerController.updateProviderBookingStatus
-);
+// Preferred routes: derive Provider_ID from the authenticated User_ID.
+router.get("/me", providerController.getProviderProfile);
+router.put("/me", providerController.updateProviderProfile);
+router.get("/me/company", providerController.getCompanyDetails);
+router.put("/me/company", providerController.updateCompanyDetails);
+router.get("/me/individual", providerController.getIndividualDetails);
 
-// Company and individual details
+// Provider booking management (must come before the "/:id" routes)
+router.get("/bookings", providerController.getProviderBookings);
+router.patch("/bookings/:id/status", providerController.updateProviderBookingStatus);
+
+// Backward-compatible ID routes. Ownership is still checked against the JWT.
 router.get("/company/:id", providerController.getCompanyDetails);
 router.get("/individual/:id", providerController.getIndividualDetails);
-
-// Provider profile
 router.get("/:id", providerController.getProviderProfile);
 router.put("/:id", providerController.updateProviderProfile);
 

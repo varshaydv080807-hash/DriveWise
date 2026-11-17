@@ -1,11 +1,18 @@
 // DriveWise — customer view logic
-// Plain JavaScript. Data comes from customer-data.js; the map uses Leaflet (vendor/leaflet).
-// Bookings, saved vehicles, addresses and profile edits are kept in localStorage so the
-// demo remembers them between page loads. Swap the load/save helpers for fetch() calls
-// to your backend later.
+// Plain JavaScript. The map uses Leaflet (vendor/leaflet).
+//
+// Two data modes:
+// - LIVE: vehicles, bookings and the profile come from the backend API (api.js).
+//   Booking and cancelling write to the MySQL database through the API.
+// - DEMO: if the server can't be reached, the page falls back to the mock data in
+//   customer-data.js and keeps everything in localStorage, and says so in a banner.
 
 (function () {
   "use strict";
+
+  let LIVE = false;          // true once data has loaded from the backend
+  let SLOTS_KNOWN = false;   // true if the backend told us which dates are booked
+  let liveProblem = "";      // why we fell back to demo data
 
   /* ==================================================================
      Helpers
@@ -45,6 +52,9 @@
     return d;
   }
 
+  // The hidden attribute loses to CSS display rules, so hide with inline style
+  const setShown = (el, shown) => { if (el) el.style.display = shown ? "" : "none"; };
+
   const byId = (list, id) => list.find((x) => x.id === id);
   const ownerOf = (v) => byId(DW_OWNERS, v.ownerId);
   const locationOf = (id) => byId(DW_LOCATIONS, id);
@@ -72,12 +82,31 @@
   /* ==================================================================
      Photos (Wikimedia Commons) with drawn fallback
   ================================================================== */
-  const photoUrl = (v, width = 640) =>
-    `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(v.photo)}?width=${width}`;
-  const photoPage = (v) => `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(v.photo)}`;
+  const WIKI_FILEPATH = "https://commons.wikimedia.org/wiki/Special:FilePath/";
+
+  // Live vehicles carry a full image URL (Vehicle_Image_URL); demo ones a Wikimedia file name.
+  function photoUrl(v, width = 640) {
+    if (v.imageUrl) {
+      return v.imageUrl.startsWith(WIKI_FILEPATH) && !v.imageUrl.includes("?")
+        ? `${v.imageUrl}?width=${width}` : v.imageUrl;
+    }
+    return `${WIKI_FILEPATH}${encodeURIComponent(v.photo)}?width=${width}`;
+  }
+  function photoPage(v) {
+    if (v.imageUrl) {
+      return v.imageUrl.startsWith(WIKI_FILEPATH)
+        ? "https://commons.wikimedia.org/wiki/File:" + v.imageUrl.slice(WIKI_FILEPATH.length).split("?")[0]
+        : v.imageUrl;
+    }
+    return `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(v.photo)}`;
+  }
+  const hasPhoto = (v) => Boolean(v.imageUrl || v.photo);
 
   function photoHTML(v, width = 640, cls = "vphoto") {
-    return `<img class="${cls}" src="${photoUrl(v, width)}" alt="${esc(vName(v))}" loading="lazy" decoding="async" data-vid="${v.id}">`;
+    if (!hasPhoto(v)) {
+      return `<div class="vphoto-fallback" style="background:${tint(v.color)}">${vehicleArt(v)}</div>`;
+    }
+    return `<img class="${cls}" src="${esc(photoUrl(v, width))}" alt="${esc(vName(v))}" loading="lazy" decoding="async" data-vid="${v.id}">`;
   }
 
   // If a photo fails (offline, or the file moved), draw the vehicle instead
@@ -127,19 +156,37 @@
   /* ==================================================================
      Pricing, availability, drivers
   ================================================================== */
-  const ownerBlocks = (v) => v.booked.map(([a, b]) => [atOffset(a), atOffset(b + 1)]);
+  // Live vehicles: real booked slots from the database. Demo vehicles: day offsets.
+  const ownerBlocks = (v) => (v.blocks ? v.blocks : v.booked.map(([a, b]) => [atOffset(a), atOffset(b + 1)]));
   const overlaps = (s1, e1, s2, e2) => s1 < e2 && e1 > s2;
+  const isActiveStatus = (status) => status === "confirmed" || status === "pending";
 
   function isFree(v, pickup, dropoff, ignoreBookingId) {
+    if (v.available === false) return false;
     for (const [s, e] of ownerBlocks(v)) if (overlaps(pickup, dropoff, s, e)) return false;
     for (const b of store.bookings) {
-      if (b.vehicleId !== v.id || b.status !== "confirmed" || b.id === ignoreBookingId) continue;
+      if (b.vehicleId !== v.id || !isActiveStatus(b.status) || b.id === ignoreBookingId) continue;
       if (overlaps(pickup, dropoff, new Date(b.pickup), new Date(b.dropoff))) return false;
     }
     return true;
   }
 
+  // Live prices are per hour, exactly like the calculate_booking_amount procedure:
+  // hours between pickup and return × Price_Per_Hour.
+  const rentalHours = (pickup, dropoff) => Math.max(0, (dropoff - pickup) / (60 * 60 * 1000));
+  const fmtHours = (h) => {
+    const r = Math.round(h * 100) / 100;
+    return `${r.toLocaleString("en-IN", { maximumFractionDigits: 2 })} hour${r === 1 ? "" : "s"}`;
+  };
+  const unitPrice = (v) => (LIVE ? v.pricePerHour : v.pricePerDay);
+  const unitLabel = () => (LIVE ? "per hour" : "per day");
+
   function quote(v, pickup, dropoff, addonIds, opts = {}) {
+    if (LIVE) {
+      const hours = rentalHours(pickup, dropoff);
+      const total = Math.round(hours * v.pricePerHour * 100) / 100;
+      return { hours, days: rentalDays(pickup, dropoff), rentalCost: total, addonCost: 0, driverCost: 0, deliveryCost: 0, tax: 0, deposit: 0, total };
+    }
     const days = rentalDays(pickup, dropoff);
     const rentalCost = v.pricePerDay * days;
     const addonCost = addonIds.reduce((sum, id) => sum + byId(DW_ADDONS, id).price * days, 0);
@@ -205,16 +252,236 @@
   }
 
   function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch (e) { /* ignore */ }
+    try {
+      // Live mode: the database holds bookings and the profile; only saved vehicles stay in the browser
+      if (LIVE) localStorage.setItem(LIVE_SAVED_KEY, JSON.stringify(store.saved));
+      else localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    } catch (e) { /* ignore */ }
   }
 
   let store = loadState();
 
   /* ==================================================================
+     Live data from the backend API
+  ================================================================== */
+  const LIVE_SAVED_KEY = "drivewise_saved_live";
+  const CITY_CENTRES = {
+    "new delhi": [28.6139, 77.2090], delhi: [28.6139, 77.2090], gurugram: [28.4595, 77.0266],
+    gurgaon: [28.4595, 77.0266], noida: [28.5355, 77.3910], faridabad: [28.4089, 77.3178], ghaziabad: [28.6692, 77.4538]
+  };
+  const COLOURS = ["#C8412F", "#2E6E8E", "#3F5A3A", "#8A8F96", "#1F4E8C", "#A31F34", "#5B5F66", "#E86A10", "#25303B", "#9A3B2E"];
+
+  const num = (x) => (x === null || x === undefined || x === "" ? null : Number(x));
+
+  function vehicleTypeOf(row) {
+    const cat = String(row.Vehicle_Category || "").toLowerCase();
+    if (cat === "scooter") return "scooter";
+    if (cat === "bike") return /activa|scooty|jupiter|access|scooter/i.test(`${row.Model} ${row.Type_Name}`) ? "scooter" : "bike";
+    return "car";
+  }
+
+  function bodyOf(row, type) {
+    if (type !== "car") return type;
+    const t = String(row.Type_Name || "").toLowerCase();
+    if (t.includes("hatch")) return "hatchback";
+    if (t.includes("sedan")) return "sedan";
+    if (t.includes("muv") || t.includes("traveller") || t.includes("van")) return "muv";
+    if (t.includes("suv") || t.includes("off")) return "suv";
+    return "sedan";
+  }
+
+  // Turn one row from GET /api/vehicles into the shape the page uses
+  function mapVehicle(row, locations) {
+    const type = vehicleTypeOf(row);
+    const city = row.City || "Delhi NCR";
+    const placeName = row.Pickup_Address || city;
+    const locId = "L" + hash(`${placeName}|${city}`);
+    if (!locations.has(locId)) {
+      const centre = CITY_CENTRES[city.toLowerCase()] || CITY_CENTRES.delhi;
+      const lat = num(row.Latitude), lng = num(row.Longitude);
+      locations.set(locId, { id: locId, name: placeName, city, lat: lat ?? centre[0], lng: lng ?? centre[1] });
+    }
+    const features = [];
+    if (row.Type_Name) features.push(row.Type_Name);
+    if (Number(row.GPS_Enabled) === 1) features.push("GPS tracked");
+    if (row.Manufacture_Year) features.push(`${row.Manufacture_Year} model`);
+    const pricePerHour = Number(row.Price_Per_Hour) || 0;
+    return {
+      id: "V" + row.Vehicle_ID,
+      dbId: row.Vehicle_ID,
+      type,
+      body: bodyOf(row, type),
+      make: row.Brand || "Vehicle",
+      model: row.Model || `#${row.Vehicle_ID}`,
+      year: row.Manufacture_Year || "",
+      plate: row.Registration_No || `DW ${row.Vehicle_ID}`,
+      color: COLOURS[hash(String(row.Registration_No || row.Vehicle_ID)) % COLOURS.length],
+      imageUrl: row.Vehicle_Image_URL || null,
+      fuel: row.Fuel_Type || "Petrol",
+      transmission: null,
+      seats: num(row.Seating_Capacity) ?? (type === "car" ? 5 : 2),
+      pricePerHour,
+      pricePerDay: pricePerHour * 24,
+      deposit: 0,
+      kmLimit: null,
+      gps: Number(row.GPS_Enabled) === 1,
+      ownerId: "P" + row.Provider_ID,
+      locationId: locId,
+      features,
+      booked: [],
+      blocks: [],
+      available: row.Status === "Available",
+      listed: row.Vehicle_Verification_Status === "Verified"
+    };
+  }
+
+  function mapOwner(row) {
+    return {
+      id: "P" + row.Provider_ID,
+      type: String(row.Provider_Type || "").toLowerCase() === "individual" ? "individual" : "company",
+      name: row.Provider_Name || `Provider ${row.Provider_ID}`,
+      rating: num(row.Provider_Rating),
+      trips: num(row.Provider_Review_Count) || 0,
+      since: null,
+      phone: null
+    };
+  }
+
+  // Turn one row from GET /api/bookings/my into the shape the page uses
+  function mapBooking(row) {
+    const v = vehicleOf("V" + row.Vehicle_ID);
+    const pickup = DW_API.parseSqlDateTime(row.Start_DateTime);
+    const dropoff = DW_API.parseSqlDateTime(row.End_DateTime);
+    const total = Number(row.Total_Amount) || 0;
+    return {
+      id: "DW-" + row.Booking_ID,
+      dbId: row.Booking_ID,
+      vehicleId: "V" + row.Vehicle_ID,
+      locationId: v ? v.locationId : null,
+      pickup: toInputValue(pickup),
+      dropoff: toInputValue(dropoff),
+      addons: [], driverId: null, delivery: { mode: "hub" },
+      hours: rentalHours(pickup, dropoff),
+      days: rentalDays(pickup, dropoff),
+      rate: Number(row.Price_Per_Hour_Snapshot) || (v ? v.pricePerHour : 0),
+      rentalCost: total, addonCost: 0, driverCost: 0, deliveryCost: 0, tax: 0, deposit: 0, total,
+      status: String(row.Booking_Status || "Pending").toLowerCase(),
+      createdAt: null, cancelledAt: null
+    };
+  }
+
+  // Replace the contents of a mock-data array in place (the arrays are const)
+  function replaceAll(arr, items) { arr.length = 0; items.forEach((x) => arr.push(x)); }
+
+  const session = () => (LIVE ? DW_API.getUser() : null);
+  const isCustomer = () => { const u = session(); return Boolean(u && u.userRole === "Customer"); };
+
+  function guestCustomer() {
+    return { id: null, name: "Guest", email: "", phone: "", licenseNo: "", licenseVerified: false, city: "Delhi", addresses: [] };
+  }
+
+  function readLiveSaved() {
+    try { const s = JSON.parse(localStorage.getItem(LIVE_SAVED_KEY)); return Array.isArray(s) ? s : []; } catch (e) { return []; }
+  }
+
+  async function loadLiveVehicles() {
+    const [vRes, sRes] = await Promise.all([
+      DW_API.getVehicles(),
+      DW_API.getBookedSlots().catch(() => null) // older backends don't have this endpoint
+    ]);
+    const rows = (vRes && vRes.vehicles) || [];
+    const locations = new Map();
+    const owners = new Map();
+    const vehicles = rows.map((r) => {
+      if (!owners.has("P" + r.Provider_ID)) owners.set("P" + r.Provider_ID, mapOwner(r));
+      return mapVehicle(r, locations);
+    });
+
+    SLOTS_KNOWN = Boolean(sRes && Array.isArray(sRes.slots));
+    if (SLOTS_KNOWN) {
+      const byVehicle = new Map(vehicles.map((v) => [v.dbId, v]));
+      sRes.slots.forEach((s) => {
+        const v = byVehicle.get(s.Vehicle_ID);
+        if (v) v.blocks.push([DW_API.parseSqlDateTime(s.Start_DateTime), DW_API.parseSqlDateTime(s.End_DateTime)]);
+      });
+    }
+
+    replaceAll(DW_VEHICLES, vehicles);
+    replaceAll(DW_OWNERS, [...owners.values()]);
+    replaceAll(DW_LOCATIONS, [...locations.values()].sort((a, b) => a.city.localeCompare(b.city) || a.name.localeCompare(b.name)));
+  }
+
+  // Bookings + profile of the logged-in customer
+  async function loadLiveCustomer() {
+    const user = DW_API.getUser();
+    store.customer = guestCustomer();
+    store.bookings = [];
+    if (!user) return;
+    store.customer.name = user.name || "Customer";
+    store.customer.email = user.email || "";
+    if (user.userRole !== "Customer") return;
+
+    const [pRes, bRes] = await Promise.all([DW_API.getProfile(), DW_API.getMyBookings()]);
+    const p = pRes.user || {};
+    Object.assign(store.customer, {
+      id: p.User_ID, name: p.Name || store.customer.name, email: p.Email || store.customer.email,
+      phone: p.Phone || "", licenseNo: p.Driving_License_No || "", licenseVerified: Boolean(p.Driving_License_No)
+    });
+    store.bookings = (bRes.bookings || []).map(mapBooking);
+  }
+
+  // Reload vehicles, booked slots and the customer's trips after a change
+  async function refreshLive() {
+    await loadLiveVehicles();
+    await loadLiveCustomer();
+  }
+
+  async function startLive() {
+    if (!window.DW_API) throw new Error("api.js didn't load");
+    await loadLiveVehicles();
+    LIVE = true;
+    store = { customer: guestCustomer(), bookings: [], saved: readLiveSaved() };
+    try {
+      await loadLiveCustomer();
+    } catch (e) {
+      if (e.status === 401) { DW_API.logout(); store.customer = guestCustomer(); }
+      else showBanner(`Vehicles loaded, but your trips couldn't be loaded: ${e.message}`, true);
+    }
+  }
+
+  /* ---------------- Banner + loading state ---------------- */
+  function showBanner(text, isError, withRetry) {
+    let b = $("#dataBanner");
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "dataBanner";
+      b.setAttribute("role", "status");
+      $("#main").prepend(b);
+    }
+    b.className = "data-banner" + (isError ? " is-error" : "");
+    b.innerHTML = `<span>${esc(text)}</span>${withRetry ? `<button class="btn btn-ghost" type="button" data-action="retry-live">Try again</button>` : ""}`;
+    b.hidden = false;
+  }
+
+  function showLoading() {
+    $("#listing").innerHTML = `<li class="loading-row"><span class="spinner" aria-hidden="true"></span><span id="loadingText">Loading vehicles…</span></li>`;
+    $("#resultsSummary").textContent = "";
+    return setTimeout(() => {
+      const t = $("#loadingText");
+      if (t) t.textContent = "Waking up the DriveWise server. The first load can take up to a minute…";
+    }, 4000);
+  }
+
+  function loginUrl(hashName) {
+    return `login.html?next=${encodeURIComponent("customer-portal.html" + (hashName ? "#" + hashName : ""))}`;
+  }
+
+  /* ==================================================================
      Search + filter state
   ================================================================== */
   const search = { type: "all", location: "all", pickup: atOffset(1, "10:00"), dropoff: atOffset(3, "10:00") };
-  const filters = { text: "", fuel: new Set(), trans: new Set(), owner: new Set(), seats: 0, maxPrice: 6000, driver: false, onlyFree: true, sort: "recommended" };
+  let PRICE_MAX = 6000; // per day in demo mode, per hour in live mode (set in setupBrowse)
+  const filters = { text: "", fuel: new Set(), trans: new Set(), owner: new Set(), seats: 0, maxPrice: PRICE_MAX, driver: false, onlyFree: true, sort: "recommended" };
   let tripTab = "upcoming";
 
   /* ==================================================================
@@ -231,18 +498,38 @@
     $("#searchDropoff").min = minNow;
 
     const chip = (value) => `<label class="chip"><input type="checkbox" value="${esc(value)}"><span>${esc(value)}</span></label>`;
-    [...new Set(DW_VEHICLES.map((v) => v.fuel))].forEach((f) => $("#fFuel").insertAdjacentHTML("beforeend", chip(f)));
-    [...new Set(DW_VEHICLES.map((v) => v.transmission))].forEach((t) => $("#fTrans").insertAdjacentHTML("beforeend", chip(t)));
+    const listed = DW_VEHICLES.filter((v) => v.listed !== false);
+    [...new Set(listed.map((v) => v.fuel).filter(Boolean))].forEach((f) => $("#fFuel").insertAdjacentHTML("beforeend", chip(f)));
+    const gearboxes = [...new Set(listed.map((v) => v.transmission).filter(Boolean))];
+    gearboxes.forEach((t) => $("#fTrans").insertAdjacentHTML("beforeend", chip(t)));
+    setShown($("#fTrans").closest("fieldset"), gearboxes.length > 0);
+
+    if (LIVE) {
+      // Prices in the database are per hour; drivers aren't part of the backend yet
+      const top = Math.max(50, ...listed.map((v) => v.pricePerHour));
+      PRICE_MAX = Math.ceil(top / 10) * 10;
+      const range = $("#fPrice");
+      Object.assign(range, { min: 10, max: PRICE_MAX, step: 5, value: PRICE_MAX });
+      range.closest(".field").querySelector(".field-label").firstChild.textContent = "Max price per hour: ";
+      setShown($("#fDriver").closest(".toggle"), false);
+      // Doorstep delivery and drivers aren't in the backend yet, so don't promise them
+      $("#browseTitle").textContent = "Pick it up nearby. Pay by the hour.";
+      $(".hero-text p").textContent = "Cars, bikes and scooters from rental companies and local owners across Delhi NCR. Book for a few hours or a few days.";
+    }
+    filters.maxPrice = PRICE_MAX;
+    $("#fPriceOut").textContent = rupees(PRICE_MAX);
 
     // Featured vehicle in the hero
-    const feat = vehicleOf("VH103");
-    $("#heroPhoto").innerHTML = `
+    const feat = LIVE
+      ? (listed.find((v) => /thar/i.test(v.model) && hasPhoto(v)) || listed.find(hasPhoto) || listed[0])
+      : vehicleOf("VH103");
+    $("#heroPhoto").innerHTML = feat ? `
       ${photoHTML(feat, 960, "hero-img")}
       <figcaption>
         <span class="plate plate-sm">${esc(feat.plate)}</span>
-        <span>${esc(vName(feat))} from ${rupees(feat.pricePerDay)} a day</span>
+        <span>${esc(vName(feat))} from ${rupees(unitPrice(feat))} ${LIVE ? "an hour" : "a day"}</span>
         <button class="btn btn-go btn-sm" type="button" data-open="${feat.id}">View</button>
-      </figcaption>`;
+      </figcaption>` : "";
 
     $$('input[name="type"]').forEach((r) => r.addEventListener("change", () => { search.type = r.value; renderListing(); }));
     locSel.addEventListener("change", () => { search.location = locSel.value; renderListing(); });
@@ -291,13 +578,13 @@
   }
 
   function resetFilters() {
-    Object.assign(filters, { text: "", seats: 0, maxPrice: 6000, driver: false, onlyFree: true, sort: "recommended" });
+    Object.assign(filters, { text: "", seats: 0, maxPrice: PRICE_MAX, driver: false, onlyFree: true, sort: "recommended" });
     filters.fuel.clear(); filters.trans.clear(); filters.owner.clear();
     $("#fText").value = "";
     $$(".filters .chip input[type=checkbox]").forEach((c) => (c.checked = false));
     $('#fSeats input[value="0"]').checked = true;
-    $("#fPrice").value = 6000;
-    $("#fPriceOut").textContent = rupees(6000);
+    $("#fPrice").value = PRICE_MAX;
+    $("#fPriceOut").textContent = rupees(PRICE_MAX);
     $("#fDriver").checked = false;
     $("#fAvail").checked = true;
     $("#sortBy").value = "recommended";
@@ -307,6 +594,7 @@
   function filteredVehicles() {
     const list = DW_VEHICLES.filter((v) => {
       const o = ownerOf(v);
+      if (v.listed === false) return false; // live: only admin-verified vehicles can be booked
       if (search.type !== "all" && v.type !== search.type) return false;
       if (search.location !== "all" && v.locationId !== search.location) return false;
       if (filters.text && !`${vName(v)} ${o.name}`.toLowerCase().includes(filters.text)) return false;
@@ -314,19 +602,38 @@
       if (filters.trans.size && !filters.trans.has(v.transmission)) return false;
       if (filters.owner.size && !filters.owner.has(o.type)) return false;
       if (v.seats < filters.seats) return false;
-      if (v.pricePerDay > filters.maxPrice) return false;
+      if (unitPrice(v) > filters.maxPrice) return false;
       if (filters.driver && v.type !== "car") return false;
       if (filters.onlyFree && !isFree(v, search.pickup, search.dropoff)) return false;
       return true;
     });
     const busy = (v) => (isFree(v, search.pickup, search.dropoff) ? 0 : 1);
+    const rating = (v) => ownerOf(v).rating || 0;
     const sorters = {
-      recommended: (a, b) => busy(a) - busy(b) || ownerOf(b).rating - ownerOf(a).rating || a.pricePerDay - b.pricePerDay,
-      priceAsc: (a, b) => a.pricePerDay - b.pricePerDay,
-      priceDesc: (a, b) => b.pricePerDay - a.pricePerDay,
-      rating: (a, b) => ownerOf(b).rating - ownerOf(a).rating
+      recommended: (a, b) => busy(a) - busy(b) || rating(b) - rating(a) || unitPrice(a) - unitPrice(b),
+      priceAsc: (a, b) => unitPrice(a) - unitPrice(b),
+      priceDesc: (a, b) => unitPrice(b) - unitPrice(a),
+      rating: (a, b) => rating(b) - rating(a)
     };
     return list.sort(sorters[filters.sort]);
+  }
+
+  // "★ 4.6 (2,140 trips)" in demo mode; real review average in live mode
+  function ownerRatingText(o) {
+    if (o.rating === null || o.rating === undefined) return "New on DriveWise";
+    return LIVE
+      ? `<span class="star" aria-hidden="true">★</span> ${Number(o.rating).toFixed(1)} (${plural(o.trips, "review")})`
+      : `<span class="star" aria-hidden="true">★</span> ${o.rating.toFixed(1)} (${o.trips.toLocaleString("en-IN")} trips)`;
+  }
+
+  function specsHTML(v) {
+    return [
+      `<li>${esc(v.fuel)}</li>`,
+      v.transmission ? `<li>${esc(v.transmission)}</li>` : "",
+      `<li>${v.seats} seats</li>`,
+      v.kmLimit ? `<li>${v.kmLimit} km/day free</li>` : "",
+      LIVE && v.gps ? `<li>GPS tracked</li>` : ""
+    ].join("");
   }
 
   function rowHTML(v) {
@@ -335,6 +642,9 @@
     const free = isFree(v, search.pickup, search.dropoff);
     const q = quote(v, search.pickup, search.dropoff, []);
     const saved = store.saved.includes(v.id);
+    const statusText = free ? "Free for your dates"
+      : v.available === false ? "Not available right now"
+      : "Already booked for some of your dates";
 
     return `
       <li class="row${free ? "" : " is-busy"}">
@@ -347,20 +657,20 @@
           <div class="row-owner">
             <span class="tag ${o.type === "company" ? "tag-co" : "tag-owner"}">${o.type === "company" ? "Rental company" : "Local owner"}</span>
             <strong>${esc(o.name)}</strong>
-            <span><span class="star" aria-hidden="true">★</span> ${o.rating.toFixed(1)} (${o.trips.toLocaleString("en-IN")} trips)</span>
+            <span>${ownerRatingText(o)}</span>
           </div>
           <ul class="specs">
-            <li>${esc(v.fuel)}</li><li>${esc(v.transmission)}</li><li>${v.seats} seats</li><li>${v.kmLimit} km/day free</li>
-            ${v.type === "car" ? `<li class="spec-hi">Driver available</li>` : ""}
+            ${specsHTML(v)}
+            ${!LIVE && v.type === "car" ? `<li class="spec-hi">Driver available</li>` : ""}
           </ul>
-          <p class="row-loc">${pinIcon}<span>${esc(loc.name)}, ${esc(loc.city)}. Doorstep delivery for ${rupees(DW_PRICING.deliveryFee[v.type])}</span></p>
-          <p class="row-status ${free ? "ok" : "no"}">${free ? "Free for your dates" : "Already booked for some of your dates"}</p>
+          <p class="row-loc">${pinIcon}<span>${esc(loc.name)}, ${esc(loc.city)}${LIVE ? "" : `. Doorstep delivery for ${rupees(DW_PRICING.deliveryFee[v.type])}`}</span></p>
+          <p class="row-status ${free ? "ok" : "no"}">${statusText}</p>
         </div>
         <div class="row-side">
           <div class="price">
-            <strong>${rupees(v.pricePerDay)}</strong>
-            <span>per day</span>
-            <span>${rupees(q.rentalCost)} for ${plural(q.days, "day")}</span>
+            <strong>${rupees(unitPrice(v))}</strong>
+            <span>${unitLabel()}</span>
+            <span>${rupees(q.rentalCost)} for ${LIVE ? fmtHours(q.hours) : plural(q.days, "day")}</span>
           </div>
           <div class="row-actions">
             <button class="iconbtn heart" type="button" data-save="${v.id}" aria-pressed="${saved}" aria-label="${saved ? "Remove from saved" : "Save"} ${esc(vName(v))}">${heartIcon(saved)}</button>
@@ -373,8 +683,9 @@
   function renderListing() {
     const list = filteredVehicles();
     const days = rentalDays(search.pickup, search.dropoff);
+    const length = LIVE ? fmtHours(rentalHours(search.pickup, search.dropoff)) : plural(days, "day");
     $("#resultsSummary").textContent =
-      `${plural(list.length, "vehicle")} for ${fmtDateTime(search.pickup)} to ${fmtDateTime(search.dropoff)} (${plural(days, "day")})`;
+      `${plural(list.length, "vehicle")} for ${fmtDateTime(search.pickup)} to ${fmtDateTime(search.dropoff)} (${length})`;
     $("#listing").innerHTML = list.length
       ? list.map(rowHTML).join("")
       : `<li class="empty">
@@ -397,7 +708,7 @@
   }
 
   function renderSaved() {
-    const vs = store.saved.map(vehicleOf).filter(Boolean);
+    const vs = store.saved.map(vehicleOf).filter((v) => v && v.listed !== false);
     $("#savedList").innerHTML = vs.length
       ? vs.map(rowHTML).join("")
       : `<li class="empty"><h3>No saved vehicles yet</h3><p>Tap the heart on any vehicle to keep it here while you decide.</p><a class="btn btn-primary" href="#browse">Find a ride</a></li>`;
@@ -450,10 +761,12 @@
           <span class="avatar" aria-hidden="true">${esc(initials(o.name))}</span>
           <div>
             <strong>${esc(o.name)}</strong>
-            <div class="muted small">${o.type === "company" ? "Rental company" : "Local owner"} on DriveWise since ${o.since}. <span class="star" aria-hidden="true">★</span> ${o.rating.toFixed(1)} from ${o.trips.toLocaleString("en-IN")} trips</div>
+            <div class="muted small">${o.type === "company" ? "Rental company" : "Local owner"}${o.since ? ` on DriveWise since ${o.since}` : ""}. ${o.rating !== null && o.rating !== undefined
+              ? `<span class="star" aria-hidden="true">★</span> ${Number(o.rating).toFixed(1)} from ${LIVE ? plural(o.trips, "review") : o.trips.toLocaleString("en-IN") + " trips"}`
+              : "No reviews yet"}</div>
           </div>
         </div>
-        <ul class="specs"><li>${esc(v.fuel)}</li><li>${esc(v.transmission)}</li><li>${v.seats} seats</li><li>${v.kmLimit} km/day free</li></ul>
+        <ul class="specs">${specsHTML(v)}</ul>
         <ul class="feature-list">${v.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
       </div>
 
@@ -467,6 +780,11 @@
           <p class="row-status" id="bAvail" role="status"></p>
         </div>
 
+        ${LIVE ? `
+        <div class="sheet-section">
+          <h3>Pickup point</h3>
+          <div class="info-card">${pinIcon}<div><strong>${esc(loc.name)}, ${esc(loc.city)}</strong><span class="muted small">Return it to the same place.</span></div></div>
+        </div>` : `
         <fieldset class="sheet-section">
           <legend class="sheet-legend">How you'll get it</legend>
           <div class="choices">
@@ -519,7 +837,7 @@
                 <span class="choice-price">${rupees(a.price)}/day</span>
               </label>`).join("")}
           </div>
-        </div>
+        </div>`}
 
         <div class="sheet-section">
           <h3>Price</h3>
@@ -529,7 +847,7 @@
 
         <div class="sheet-footer">
           <div><strong class="footer-total" id="bTotal"></strong><div class="muted small">Pay at pickup</div></div>
-          <button class="btn btn-go" type="submit" id="bSubmit">Confirm booking</button>
+          <button class="btn btn-go" type="submit" id="bSubmit">${LIVE && !session() ? "Log in to book" : "Confirm booking"}</button>
         </div>
       </form>`);
 
@@ -545,17 +863,25 @@
     const pickup = parseInput($("#bPickup").value);
     const dropoff = parseInput($("#bDropoff").value);
     const addonIds = $$('input[name="addon"]:checked', f).map((i) => i.value);
-    const door = f.elements.handover.value === "door";
+    // Live mode has no handover/driver/address fields
+    const door = Boolean(f.elements.handover) && f.elements.handover.value === "door";
     const driver = Boolean(f.elements.drive) && f.elements.drive.value === "driver";
-    const addrId = $("#bAddress").value;
-    const newAddr = $("#bNewAddr").value.trim();
+    const addrId = $("#bAddress") ? $("#bAddress").value : "";
+    const newAddr = $("#bNewAddr") ? $("#bNewAddr").value.trim() : "";
     return { pickup, dropoff, addonIds, door, driver, addrId, newAddr };
   }
 
   function bookingProblem(v, s) {
     const dp = dateProblem(s.pickup, s.dropoff);
     if (dp) return dp;
+    if (v.available === false) return "This vehicle isn't available for booking right now.";
     if (!isFree(v, s.pickup, s.dropoff)) return "This vehicle is already booked for part of these dates. Try different dates.";
+    if (LIVE) {
+      if (!session()) return ""; // the button sends them to log in
+      if (!isCustomer()) return "Only customer accounts can book. Log in with a customer account to book.";
+      if (!store.customer.licenseNo) return "Add your driving licence number in Profile before booking.";
+      return "";
+    }
     if (s.door && s.addrId === "new" && s.newAddr.length < 10) return "Type the full delivery address, including area and PIN code.";
     if (s.driver && !findDriver(v, s.pickup, s.dropoff)) return "No drivers are free for these dates. Drive yourself or pick other dates.";
     if (!s.driver && !store.customer.licenseVerified) return "Verify your driving licence in Profile, or book with a driver.";
@@ -565,15 +891,18 @@
   function updateBookingSummary() {
     const v = sheetVehicle;
     const s = readBookingForm();
-    $("#doorFields").hidden = !s.door;
-    $("#bNewAddrWrap").hidden = !(s.door && s.addrId === "new");
+    if ($("#doorFields")) $("#doorFields").hidden = !s.door;
+    if ($("#bNewAddrWrap")) $("#bNewAddrWrap").hidden = !(s.door && s.addrId === "new");
 
     const validDates = Boolean(s.pickup && s.dropoff && s.dropoff > s.pickup);
     const avail = $("#bAvail");
     if (validDates) {
       const free = isFree(v, s.pickup, s.dropoff);
+      const length = LIVE ? fmtHours(rentalHours(s.pickup, s.dropoff)) : plural(rentalDays(s.pickup, s.dropoff), "day");
       avail.className = "row-status " + (free ? "ok" : "no");
-      avail.textContent = free ? `Free for these dates (${plural(rentalDays(s.pickup, s.dropoff), "day")})` : "Already booked for some of these dates";
+      avail.textContent = free
+        ? `Free for these dates (${length})${LIVE && !SLOTS_KNOWN ? ". We'll double-check when you confirm." : ""}`
+        : v.available === false ? "Not available right now" : "Already booked for some of these dates";
     } else avail.textContent = "";
 
     const note = $("#bDriverNote");
@@ -584,7 +913,13 @@
       } else note.textContent = "";
     }
 
-    if (validDates) {
+    if (validDates && LIVE) {
+      const q = quote(v, s.pickup, s.dropoff, [], {});
+      $("#bBill").innerHTML =
+        `<div><dt>${rupees(v.pricePerHour)} per hour × ${fmtHours(q.hours)}</dt><dd>${rupees(q.rentalCost)}</dd></div>` +
+        `<div class="bill-total"><dt>Trip total</dt><dd>${rupees(q.total)}</dd></div>`;
+      $("#bTotal").textContent = rupees(q.total);
+    } else if (validDates) {
       const q = quote(v, s.pickup, s.dropoff, s.addonIds, s);
       const lines = [[`${rupees(v.pricePerDay)} × ${plural(q.days, "day")}`, q.rentalCost]];
       if (q.driverCost) lines.push([`Driver, ${rupees(DW_PRICING.driverPerDay)} × ${plural(q.days, "day")}`, q.driverCost]);
@@ -622,11 +957,40 @@
     return { lat: loc.lat + ((h % 100) - 50) / 2500, lng: loc.lng + (((h >> 8) % 100) - 50) / 2500 };
   }
 
+  // Live: POST /api/bookings. The backend checks availability again inside a
+  // transaction and calculates the total with the stored procedure.
+  async function submitLiveBooking(v, s) {
+    if (!session()) { location.href = loginUrl("browse"); return; }
+    const btn = $("#bSubmit");
+    const err = $("#bError");
+    btn.disabled = true;
+    btn.textContent = "Booking…";
+    try {
+      const res = await DW_API.createBooking(v.dbId, s.pickup, s.dropoff);
+      const created = res.booking;
+      try { await refreshLive(); } catch (e) { /* the booking worked; a refresh failure isn't fatal */ }
+      const b = store.bookings.find((x) => x.dbId === created.Booking_ID) || mapBooking(created);
+      if (!store.bookings.includes(b)) store.bookings.unshift(b);
+      showTicket(b);
+      renderListing(); renderTrips(); renderProfile(); updateCounts();
+    } catch (e) {
+      if (e.status === 401) { location.href = loginUrl("browse"); return; }
+      err.hidden = false;
+      err.textContent = e.message;
+      btn.disabled = false;
+      btn.textContent = "Confirm booking";
+      if (e.status === 409) { // someone else booked it meanwhile: refresh slots
+        refreshLive().then(() => { renderListing(); }).catch(() => {});
+      }
+    }
+  }
+
   function submitBooking(e) {
     e.preventDefault();
     const v = sheetVehicle;
     const s = readBookingForm();
     if (bookingProblem(v, s)) { updateBookingSummary(); return; }
+    if (LIVE) { submitLiveBooking(v, s); return; }
 
     let delivery = { mode: "hub" };
     if (s.door) {
@@ -657,8 +1021,11 @@
       <div class="ticket">
         <div class="ticket-photo">${photoHTML(v, 640)}</div>
         <span class="plate plate-lg">${esc(v.plate)}</span>
+        ${b.status === "pending" ? `
+        <h2 id="sheetTitle" tabindex="-1">Booking requested</h2>
+        <p>${esc(vName(v))} is held for you for ${fmtHours(b.hours)}, total ${rupees(b.total)}. ${esc(ownerOf(v).name)} will confirm it. Show booking ID <strong>${esc(b.id)}</strong> and your driving licence at pickup.</p>` : `
         <h2 id="sheetTitle" tabindex="-1">Booking confirmed</h2>
-        <p>${esc(vName(v))} is yours for ${plural(b.days, "day")}. Show booking ID <strong>${esc(b.id)}</strong> ${d ? "to your driver" : "and your driving licence"} at pickup.</p>
+        <p>${esc(vName(v))} is yours for ${LIVE ? fmtHours(b.hours) : plural(b.days, "day")}. Show booking ID <strong>${esc(b.id)}</strong> ${d ? "to your driver" : "and your driving licence"} at pickup.</p>`}
         ${handoverHTML(b)}
         ${d ? driverCardHTML(d) : ""}
         <div class="ticket-actions">
@@ -707,7 +1074,20 @@
     cancelled: `<span class="badge badge-off">Cancelled</span>`
   };
 
+  // Pending bookings (waiting for the owner) get their own badge
+  function badgeFor(b, s) {
+    if (b.status === "pending" && s === "upcoming") return `<span class="badge badge-wait">Awaiting confirmation</span>`;
+    return STATUS_BADGE[s];
+  }
+
   function renderTrips() {
+    $$(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tab === tripTab)));
+    if (LIVE && !isCustomer()) {
+      $("#tripList").innerHTML = session()
+        ? `<li class="empty"><h3>Trips are for customer accounts</h3><p>You're logged in as ${esc(session().userRole.toLowerCase())}. Log in with a customer account to see trips.</p><button class="btn btn-primary" type="button" data-action="logout">Log out</button></li>`
+        : `<li class="empty"><h3>Log in to see your trips</h3><p>Your bookings are saved to your DriveWise account.</p><a class="btn btn-primary" href="${loginUrl("trips")}">Log in</a></li>`;
+      return;
+    }
     const groups = { upcoming: [], past: [], cancelled: [] };
     store.bookings.forEach((b) => {
       const s = tripStatus(b);
@@ -738,7 +1118,7 @@
 
     const actions = [`<button class="btn btn-ghost btn-sm" type="button" data-trip="${b.id}">Details</button>`];
     if (s === "active" || s === "upcoming") actions.unshift(`<button class="btn btn-primary btn-sm" type="button" data-track="${b.id}">Track</button>`);
-    if (s === "past" || s === "cancelled") actions.unshift(`<button class="btn btn-primary btn-sm" type="button" data-open="${v.id}">Book again</button>`);
+    if ((s === "past" || s === "cancelled") && v.listed !== false) actions.unshift(`<button class="btn btn-primary btn-sm" type="button" data-open="${v.id}">Book again</button>`);
 
     return `
       <li class="trip${s === "active" ? " is-live" : ""}">
@@ -747,7 +1127,7 @@
           <div class="trip-top">
             <h3>${esc(vName(v))}</h3>
             <span class="plate plate-sm">${esc(v.plate)}</span>
-            ${STATUS_BADGE[s]}
+            ${badgeFor(b, s)}
           </div>
           <div class="trip-route">
             <div class="leg"><small>Pickup</small><strong>${fmtDateTime(b.pickup)}</strong></div>
@@ -761,7 +1141,7 @@
           </p>
         </div>
         <div class="trip-side">
-          <div class="price"><strong>${rupees(b.total)}</strong><span>${plural(b.days, "day")}, incl. GST</span></div>
+          <div class="price"><strong>${rupees(b.total)}</strong><span>${LIVE ? fmtHours(b.hours) : plural(b.days, "day") + ", incl. GST"}</span></div>
           <div class="trip-actions">${actions.join("")}</div>
         </div>
       </li>`;
@@ -776,21 +1156,32 @@
     const s = tripStatus(b);
     const now = Date.now();
 
-    const steps = s === "cancelled"
+    // Live bookings have no "created at" time in the database, so that step is skipped
+    const steps = (s === "cancelled"
       ? [["Booked", b.createdAt, true], ["Cancelled", b.cancelledAt || b.createdAt, true]]
       : [
           ["Booked", b.createdAt, true],
           [b.delivery.mode === "door" ? `Delivered to ${b.delivery.label}` : "Picked up", b.pickup, now >= new Date(b.pickup)],
           [b.delivery.mode === "door" ? "Collected" : "Returned", b.dropoff, now >= new Date(b.dropoff) || s === "past"]
-        ];
+        ]).filter(([, when]) => Boolean(when));
+    if (LIVE && s === "cancelled") steps.push(["Cancelled", null, true]);
 
-    const lines = [[`${rupees(v.pricePerDay)} × ${plural(b.days, "day")}`, b.rentalCost]];
+    const lines = LIVE
+      ? [[`${rupees(b.rate)} per hour × ${fmtHours(b.hours)}`, b.rentalCost]]
+      : [[`${rupees(v.pricePerDay)} × ${plural(b.days, "day")}`, b.rentalCost]];
     if (b.driverCost) lines.push(["Driver", b.driverCost]);
     if (b.deliveryCost) lines.push(["Doorstep delivery and collection", b.deliveryCost]);
     b.addons.forEach((aid) => { const a = byId(DW_ADDONS, aid); if (a) lines.push([a.name, a.price * b.days]); });
-    lines.push(["GST (18%)", b.tax]);
+    if (!LIVE) lines.push(["GST (18%)", b.tax]);
 
-    const payment = {
+    const payment = LIVE ? {
+      past: `Trip total ${rupees(b.total)}.`,
+      active: `Trip total ${rupees(b.total)}, paid at pickup.`,
+      upcoming: b.status === "pending"
+        ? `Waiting for ${o.name} to confirm. Pay ${rupees(b.total)} at pickup.`
+        : `Pay ${rupees(b.total)} at pickup.`,
+      cancelled: "Cancelled. Nothing was charged."
+    }[s] : {
       past: `Paid ${rupees(b.total)} by UPI at pickup. Deposit of ${rupees(b.deposit)} refunded.`,
       active: `Paid ${rupees(b.total)} by UPI at pickup. Deposit of ${rupees(b.deposit)} is held until return.`,
       upcoming: `Pay ${rupees(b.total)} plus a refundable ${rupees(b.deposit)} deposit at pickup.`,
@@ -800,16 +1191,16 @@
     const actions = [];
     if (s === "active" || s === "upcoming") actions.push(`<button class="btn btn-go" type="button" data-track="${b.id}">Track vehicle</button>`);
     if (s === "upcoming") actions.push(`<button class="btn btn-ghost" type="button" data-cancel="${b.id}">Cancel trip</button>`);
-    if (s === "past" || s === "cancelled") actions.push(`<button class="btn btn-primary" type="button" data-open="${v.id}">Book again</button>`);
+    if ((s === "past" || s === "cancelled") && v.listed !== false) actions.push(`<button class="btn btn-primary" type="button" data-open="${v.id}">Book again</button>`);
     actions.push(`<button class="btn btn-ghost" type="button" data-action="print">Print</button>`);
 
     openSheet(`
       ${sheetHeader(v)}
       <div class="sheet-section">
-        <div class="trip-top">${STATUS_BADGE[s]}<span class="muted small">Booking ${esc(b.id)}</span></div>
+        <div class="trip-top">${badgeFor(b, s)}<span class="muted small">Booking ${esc(b.id)}</span></div>
         <h2 id="sheetTitle">${esc(vName(v))} <span class="title-year">${v.year}</span></h2>
         <ol class="timeline">
-          ${steps.map(([label, when, done]) => `<li class="${done ? "done" : ""}"><strong>${esc(label)}</strong><span>${fmtDateTime(when)}</span></li>`).join("")}
+          ${steps.map(([label, when, done]) => `<li class="${done ? "done" : ""}"><strong>${esc(label)}</strong><span>${when ? fmtDateTime(when) : ""}</span></li>`).join("")}
         </ol>
       </div>
 
@@ -825,7 +1216,7 @@
         <h3>Listed by</h3>
         <div class="person">
           <span class="avatar" aria-hidden="true">${esc(initials(o.name))}</span>
-          <div><strong>${esc(o.name)}</strong><div class="muted small">${o.type === "company" ? "Rental company" : "Local owner"}. Phone ${esc(o.phone)}</div></div>
+          <div><strong>${esc(o.name)}</strong><div class="muted small">${o.type === "company" ? "Rental company" : "Local owner"}${o.phone ? `. Phone ${esc(o.phone)}` : ""}</div></div>
         </div>
       </div>
 
@@ -841,6 +1232,21 @@
       <div class="sheet-section sheet-actions">${actions.join("")}</div>`);
   }
 
+  // Live: PATCH /api/bookings/:id/cancel, then reload trips and booked slots
+  async function cancelLive(b) {
+    toast("Cancelling…");
+    try {
+      await DW_API.cancelBooking(b.dbId);
+      try { await refreshLive(); } catch (e) { b.status = "cancelled"; }
+      if (sheet.open) openTrip(b.id);
+      renderTrips(); renderListing(); renderProfile(); updateCounts();
+      toast(`Trip cancelled. Booking ${b.id} won't be charged.`);
+    } catch (e) {
+      if (e.status === 401) { location.href = loginUrl("trips"); return; }
+      toast(`Couldn't cancel: ${e.message}`);
+    }
+  }
+
   const confirmDialog = $("#confirmDialog");
   function askCancel(id) {
     const b = byId(store.bookings, id);
@@ -852,6 +1258,7 @@
     confirmDialog.addEventListener("close", function onClose() {
       confirmDialog.removeEventListener("close", onClose);
       if (confirmDialog.returnValue !== "yes") return;
+      if (LIVE) { cancelLive(b); return; }
       b.status = "cancelled";
       b.cancelledAt = toInputValue(new Date());
       saveState();
@@ -909,6 +1316,8 @@
     $("#trackSub").textContent = live
       ? `On trip until ${fmtDateTime(b.dropoff)}. Location updates every few seconds.`
       : `Trip starts ${fmtDateTime(b.pickup)}. Live tracking switches on at pickup.`;
+    // The backend has no live GPS feed yet, so movement on the map is simulated
+    if (LIVE) $("#trackSub").textContent += " (Demo: the route shown is simulated.)";
 
     if (sheet.open) sheet.close();
     tracker.showModal();
@@ -958,7 +1367,7 @@
           <div><dt>Speed</dt><dd>${speed} km/h</dd></div>
           <div><dt>${v.fuel === "Electric" ? "Charge" : "Fuel"}</dt><dd>${live ? level : 100}%</dd></div>
           <div><dt>Driven this trip</dt><dd>${track.travelled.toFixed(1)} km</dd></div>
-          <div><dt>Free km left</dt><dd>${Math.max(0, Math.round(allowance - track.travelled))} km</dd></div>
+          ${v.kmLimit ? `<div><dt>Free km left</dt><dd>${Math.max(0, Math.round(allowance - track.travelled))} km</dd></div>` : ""}
           <div><dt>${b.delivery.mode === "door" ? "From " + esc(b.delivery.label) : "From pickup point"}</dt><dd>${kmBetween(pos, home).toFixed(1)} km</dd></div>
         </dl>
         ${track.d ? driverCardHTML(track.d) : `<p class="muted small">Self-drive trip. The owner sees the same location to keep the vehicle safe.</p>`}
@@ -994,7 +1403,9 @@
       zIndexOffset: 1000
     }).addTo(map);
     map.fitBounds(L.latLngBounds(latlngs).pad(0.15));
-    setTimeout(() => map.invalidateSize(), 60);
+    let removed = false;
+    // invalidateSize after the dialog has closed throws inside Leaflet, so skip it then
+    setTimeout(() => { if (!removed) map.invalidateSize(); }, 60);
 
     return {
       update(i) {
@@ -1002,7 +1413,7 @@
         trail.setLatLngs(latlngs.slice(0, i + 1));
       },
       recenter() { map.setView(marker.getLatLng(), 15); },
-      destroy() { map.remove(); }
+      destroy() { removed = true; map.stop(); map.remove(); }
     };
   }
 
@@ -1044,13 +1455,55 @@
   /* ==================================================================
      Profile
   ================================================================== */
+  // Live mode: what the profile page shows when nobody (or a non-customer) is logged in
+  function renderProfileGate() {
+    let gate = $("#profileGate");
+    if (!gate) {
+      gate = document.createElement("div");
+      gate.id = "profileGate";
+      $(".profile-grid").before(gate);
+    }
+    const u = session();
+    gate.innerHTML = u
+      ? `<div class="empty"><h3>Logged in as ${esc(u.name)}</h3><p>This is a ${esc(String(u.userRole).toLowerCase())} account. The customer profile is for customer accounts.</p><button class="btn btn-primary" type="button" data-action="logout">Log out</button></div>`
+      : `<div class="empty"><h3>Log in to see your profile</h3><p>Log in or create an account to book vehicles and keep track of your trips.</p><a class="btn btn-primary" href="${loginUrl("profile")}">Log in</a><a class="linkbtn" href="login.html?mode=signup&amp;next=${encodeURIComponent("customer-portal.html#profile")}">Create an account</a></div>`;
+    $("#navAvatar").textContent = u ? initials(u.name) : "?";
+    $("#navName").textContent = u ? (String(u.name).split(" ")[0] || "Profile") : "Log in";
+  }
+
+  // Live mode: set up the profile page for real accounts (once)
+  function prepareLiveProfile() {
+    const form = $("#profileForm");
+    if (form.dataset.live) return;
+    form.dataset.live = "1";
+    form.elements.email.readOnly = true;
+    form.elements.email.closest(".field").querySelector(".field-label").textContent = "Email (used to log in, can't be changed)";
+    setShown(form.elements.city.closest(".field"), false); // not stored in the database
+    $("#profileError").insertAdjacentHTML("beforebegin",
+      `<label class="field"><span class="field-label">Driving licence number</span><input name="licence" maxlength="50" placeholder="e.g. DL-0420210012345"></label>`);
+    setShown($("#addressForm").closest(".panel"), false); // addresses are only for doorstep delivery (demo)
+    const btn = $("#resetDemo");
+    btn.textContent = "Log out";
+    btn.id = "logoutBtn";
+    btn.dataset.action = "logout";
+    $(".licence-card").nextElementSibling.textContent = "Bring the original licence at pickup. You need a licence number on your account to book.";
+  }
+
   function renderProfile() {
+    if (LIVE) {
+      const ok = isCustomer();
+      setShown($(".profile-grid"), ok);
+      if (!ok) { renderProfileGate(); return; }
+      if ($("#profileGate")) $("#profileGate").remove();
+      prepareLiveProfile();
+      $("#profileForm").elements.licence.value = store.customer.licenseNo || "";
+    }
     const c = store.customer;
     const form = $("#profileForm");
     ["name", "email", "phone", "city"].forEach((k) => (form.elements[k].value = c[k] || ""));
-    $("#licenceNo").textContent = c.licenseNo;
+    $("#licenceNo").textContent = c.licenseNo || (LIVE ? "No licence added yet" : "");
     const st = $("#licenceStatus");
-    st.textContent = c.licenseVerified ? "Verified" : "Not verified";
+    st.textContent = LIVE ? (c.licenseNo ? "On file" : "Missing") : (c.licenseVerified ? "Verified" : "Not verified");
     st.className = "badge " + (c.licenseVerified ? "badge-ok" : "badge-off");
 
     const taken = store.bookings.filter((b) => b.status !== "cancelled").length;
@@ -1069,6 +1522,28 @@
     $("#navName").textContent = c.name.split(" ")[0] || "Profile";
   }
 
+  // Live: PUT /api/users/:id with name, phone and driving licence
+  async function saveLiveProfile(form, body) {
+    const btn = form.querySelector('button[type="submit"]');
+    const err = $("#profileError");
+    btn.disabled = true;
+    try {
+      await DW_API.updateProfile(body);
+      Object.assign(store.customer, {
+        name: body.name, phone: body.phone,
+        licenseNo: body.drivingLicense || "", licenseVerified: Boolean(body.drivingLicense)
+      });
+      renderProfile();
+      toast("Changes saved");
+    } catch (e) {
+      if (e.status === 401) { location.href = loginUrl("profile"); return; }
+      err.hidden = false;
+      err.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   function setupProfile() {
     $("#profileForm").addEventListener("submit", (e) => {
       e.preventDefault();
@@ -1084,6 +1559,7 @@
       err.hidden = !msg;
       err.textContent = msg;
       if (msg) return;
+      if (LIVE) { saveLiveProfile(e.target, { name, phone, drivingLicense: f.licence.value.trim() || null }); return; }
       Object.assign(store.customer, { name, email, phone: f.phone.value.trim(), city: f.city.value });
       saveState();
       renderProfile();
@@ -1114,6 +1590,7 @@
     });
 
     $("#resetDemo").addEventListener("click", () => {
+      if (LIVE) return; // in live mode this button becomes "Log out" (handled by data-action)
       store = freshState();
       saveState();
       renderAll();
@@ -1144,7 +1621,7 @@
   }
 
   function showCredits() {
-    $("#creditsList").innerHTML = DW_VEHICLES.map((v) =>
+    $("#creditsList").innerHTML = DW_VEHICLES.filter(hasPhoto).map((v) =>
       `<li><a href="${photoPage(v)}" target="_blank" rel="noopener">${esc(vName(v))}</a></li>`).join("");
     $("#creditsDialog").showModal();
   }
@@ -1182,6 +1659,8 @@
     else if (a === "recenter" && track) track.renderer.recenter();
     else if (a === "reset-filters") resetFilters();
     else if (a === "credits") showCredits();
+    else if (a === "logout") { DW_API.logout(); location.href = "customer-portal.html#browse"; location.reload(); }
+    else if (a === "retry-live") location.reload();
     else if (a === "print") window.print();
     else if (t.classList.contains("tab")) { tripTab = t.dataset.tab; renderTrips(); }
   });
@@ -1192,9 +1671,26 @@
   /* ==================================================================
      Start
   ================================================================== */
-  setupBrowse();
-  setupProfile();
-  renderAll();
-  window.addEventListener("hashchange", route);
-  route();
+  async function start() {
+    const slow = showLoading();
+    try {
+      await startLive();
+    } catch (e) {
+      LIVE = false;
+      liveProblem = e.message;
+      store = loadState();
+    } finally {
+      clearTimeout(slow);
+    }
+    if (!LIVE) {
+      showBanner(`Showing demo data: ${liveProblem || "the DriveWise server couldn't be reached."} Bookings you make now are only saved in this browser.`, true, true);
+    }
+    setupBrowse();
+    setupProfile();
+    renderAll();
+    window.addEventListener("hashchange", route);
+    route();
+  }
+
+  start();
 })();

@@ -121,27 +121,49 @@ exports.addVehicle = async (req, res) => {
 // GET ALL VEHICLES
 exports.getAllVehicles = async (req, res) => {
     try {
+        // Vehicle columns plus its type and the provider listing it,
+        // so the customer portal can show seats, fuel and who owns it.
         const sql = `
             SELECT
-                Vehicle_ID,
-                Provider_ID,
-                Type_ID,
-                Home_Branch_ID,
-                Current_Branch_ID,
-                Brand,
-                Model,
-                Manufacture_Year,
-                Registration_No,
-                Price_Per_Hour,
-                Status,
-                GPS_Enabled,
-                Latitude,
-                Longitude,
-                Location_Updated_At,
-                Pickup_Address,
-                City,
-                Vehicle_Verification_Status
-            FROM vehicle
+                V.Vehicle_ID,
+                V.Provider_ID,
+                V.Type_ID,
+                V.Home_Branch_ID,
+                V.Current_Branch_ID,
+                V.Brand,
+                V.Model,
+                V.Manufacture_Year,
+                V.Registration_No,
+                V.Price_Per_Hour,
+                V.Status,
+                V.GPS_Enabled,
+                V.Latitude,
+                V.Longitude,
+                V.Location_Updated_At,
+                V.Pickup_Address,
+                V.City,
+                V.Vehicle_Verification_Status,
+                V.Vehicle_Image_URL,
+                VT.Type_Name,
+                VT.Vehicle_Category,
+                VT.Seating_Capacity,
+                VT.Fuel_Type,
+                P.Display_Name AS Provider_Name,
+                P.Provider_Type,
+                R.Avg_Rating AS Provider_Rating,
+                COALESCE(R.Review_Count, 0) AS Provider_Review_Count
+            FROM vehicle V
+            LEFT JOIN vehicle_type VT ON V.Type_ID = VT.Type_ID
+            LEFT JOIN provider P ON V.Provider_ID = P.Provider_ID
+            LEFT JOIN (
+                SELECT Provider_ID,
+                       ROUND(AVG(Rating), 1) AS Avg_Rating,
+                       COUNT(*) AS Review_Count
+                FROM review
+                WHERE Review_Type = 'Customer_To_Provider'
+                GROUP BY Provider_ID
+            ) R ON V.Provider_ID = R.Provider_ID
+            ORDER BY V.Vehicle_ID
         `;
 
         const [vehicles] = await pool.execute(sql);
@@ -157,6 +179,37 @@ exports.getAllVehicles = async (req, res) => {
 
         res.status(500).json({
             message: "Failed to retrieve vehicles"
+        });
+    }
+};
+
+
+// GET BOOKED TIME SLOTS (public)
+// Returns only vehicle ID and start/end times of upcoming Pending/Confirmed
+// bookings, so the customer portal can show which vehicles are free.
+// No customer details are exposed.
+exports.getBookedSlots = async (req, res) => {
+    try {
+        const [slots] = await pool.execute(
+            `SELECT Vehicle_ID, Start_DateTime, End_DateTime
+             FROM booking
+             WHERE Booking_Status IN ('Pending', 'Confirmed')
+               AND End_DateTime > NOW() - INTERVAL 1 DAY
+             ORDER BY Vehicle_ID, Start_DateTime`
+        );
+
+        res.status(200).json({
+            success: true,
+            count: slots.length,
+            slots
+        });
+
+    } catch (error) {
+        console.error("Get booked slots error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to retrieve booked slots"
         });
     }
 };
