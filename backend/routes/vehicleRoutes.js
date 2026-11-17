@@ -6,6 +6,7 @@ const vehicleController = require("../controllers/vehicleController");
 const authMiddleware = require("../middleware/authMiddleware");
 const authorizeRoles = require("../middleware/authorizeRoles");
 
+// Add a new vehicle
 router.post(
     "/add",
     authMiddleware,
@@ -13,13 +14,19 @@ router.post(
     vehicleController.addVehicle
 );
 
+// Get all vehicles
 router.get("/", vehicleController.getAllVehicles);
+
+// Smart Vehicle Recommendation (Feature 3)
 router.get(
     "/recommend",
     vehicleController.getRecommendedVehicles
 );
+
+// Get booked slots
 router.get("/booked-slots", vehicleController.getBookedSlots);
 
+// Update vehicle
 router.put(
     "/:id",
     authMiddleware,
@@ -27,6 +34,7 @@ router.put(
     vehicleController.updateVehicle
 );
 
+// Delete vehicle
 router.delete(
     "/:id",
     authMiddleware,
@@ -34,12 +42,14 @@ router.delete(
     vehicleController.deleteVehicle
 );
 
+// Get vehicle GPS location
 router.get(
     "/:id/location",
     authMiddleware,
     vehicleController.getVehicleLocation
 );
 
+// Update vehicle GPS location
 router.put(
     "/:id/location",
     authMiddleware,
