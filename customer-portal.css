@@ -649,3 +649,10 @@ fieldset.sheet-section > .sheet-legend + * { clear: both; }
 .nav-logout:hover { border-color: #fff; }
 
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+/* ---------- Logo: map pin with a steering wheel + "DriveWise" ---------- */
+.logo-mark { width: 30px; height: 38px; flex: none; }
+.logo-word { font-weight: 800; font-size: 1.65rem; letter-spacing: -0.03em; line-height: 1; color: #fff; }
+.logo-word span { color: var(--auto-yellow); }
+.brand { display: inline-flex; align-items: center; gap: 10px; }
+@media (max-width: 700px) { .logo-word { font-size: 1.35rem; } .logo-mark { width: 26px; height: 33px; } }

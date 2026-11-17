@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="12 7 40 51" aria-hidden="true">
+  <!-- DriveWise mark: a map pin with a steering wheel -->
+  <path d="M32 8c-10.5 0-19 8.3-19 18.6C13 40.2 32 57 32 57s19-16.8 19-30.4C51 16.3 42.5 8 32 8z" fill="#FFCE1F"/>
+  <circle cx="32" cy="26.5" r="11" fill="none" stroke="#221651" stroke-width="3.6"/>
+  <circle cx="32" cy="26.5" r="3.4" fill="#221651"/>
+  <path d="M21.4 24.6 L28.8 25.8 M42.6 24.6 L35.2 25.8 M32 30 L32 37.3" stroke="#221651" stroke-width="3.6" stroke-linecap="round"/>
+</svg>

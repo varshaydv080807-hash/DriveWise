@@ -495,3 +495,9 @@ td:last-child { white-space: nowrap; }
 .live-actions .action-btn + .action-btn { margin-left: 6px; }
 .muted-cell { color: var(--muted); font-size: 0.86rem; }
 .session-btn { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; display: block; margin-top: 6px; }
+
+/* ---------- Logo: map pin with a steering wheel + "DriveWise" ---------- */
+.logo-mark { width: 30px; height: 38px; flex: none; }
+.logo-word { font-weight: 800; font-size: 1.65rem; letter-spacing: -0.03em; line-height: 1; color: #fff; }
+.logo-word span { color: var(--auto-yellow); }
+.logo { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
