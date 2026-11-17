@@ -505,3 +505,177 @@ exports.updateVehicle = async (req, res) => {
         });
     }
 };
+// TRANSFER VEHICLE TO ANOTHER BRANCH
+exports.transferVehicle = async (req, res) => {
+    let connection;
+
+    try {
+        const vehicleId = Number(req.params.id);
+        const destinationBranchId = Number(req.body.destinationBranchId);
+
+        if (
+            !Number.isSafeInteger(vehicleId) || vehicleId <= 0 ||
+            !Number.isSafeInteger(destinationBranchId) || destinationBranchId <= 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid vehicle ID and destination branch ID are required"
+            });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        // Lock vehicle row
+        const [vehicles] = await connection.execute(
+            `SELECT Vehicle_ID, Provider_ID, Current_Branch_ID,
+                    Status, Vehicle_Verification_Status
+             FROM vehicle
+             WHERE Vehicle_ID = ?
+             FOR UPDATE`,
+            [vehicleId]
+        );
+
+        if (vehicles.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({
+                success: false,
+                message: "Vehicle not found"
+            });
+        }
+
+        const vehicle = vehicles[0];
+
+        // Identify logged-in provider
+        const [providers] = await connection.execute(
+            `SELECT Provider_ID FROM provider WHERE User_ID = ?`,
+            [req.user.userId]
+        );
+
+        if (
+            providers.length === 0 ||
+            Number(providers[0].Provider_ID) !== Number(vehicle.Provider_ID)
+        ) {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "You can only transfer your own vehicles"
+            });
+        }
+
+        // Check destination branch belongs to same provider
+        const [branches] = await connection.execute(
+            `SELECT Branch_ID
+             FROM branch
+             WHERE Branch_ID = ? AND Provider_ID = ?
+             FOR UPDATE`,
+            [destinationBranchId, vehicle.Provider_ID]
+        );
+
+        if (branches.length === 0) {
+            await connection.rollback();
+            return res.status(400).json({
+                success: false,
+                message: "Destination branch does not belong to your provider"
+            });
+        }
+
+        if (Number(vehicle.Current_Branch_ID) === destinationBranchId) {
+            await connection.rollback();
+            return res.status(400).json({
+                success: false,
+                message: "Vehicle is already at this branch"
+            });
+        }
+
+        if (vehicle.Status !== "Available") {
+            await connection.rollback();
+            return res.status(400).json({
+                success: false,
+                message: "Only available vehicles can be transferred"
+            });
+        }
+
+        if (vehicle.Vehicle_Verification_Status !== "Verified") {
+            await connection.rollback();
+            return res.status(400).json({
+                success: false,
+                message: "Only verified vehicles can be transferred"
+            });
+        }
+
+        // Check pending or confirmed future/ongoing bookings
+        const [bookings] = await connection.execute(
+            `SELECT Booking_ID
+             FROM booking
+             WHERE Vehicle_ID = ?
+               AND Booking_Status IN ('Pending', 'Confirmed')
+               AND End_DateTime > NOW()
+             LIMIT 1`,
+            [vehicleId]
+        );
+
+        if (bookings.length > 0) {
+            await connection.rollback();
+            return res.status(409).json({
+                success: false,
+                message: "Vehicle has a pending or confirmed booking"
+            });
+        }
+
+        // Check ongoing maintenance
+        const [maintenance] = await connection.execute(
+            `SELECT Maintenance_ID
+             FROM maintenance
+             WHERE Vehicle_ID = ?
+               AND Status <> 'Completed'
+               AND (Downtime_Start IS NULL OR Downtime_Start <= NOW())
+               AND (Downtime_End IS NULL OR Downtime_End >= NOW())
+             LIMIT 1`,
+            [vehicleId]
+        );
+
+        if (maintenance.length > 0) {
+            await connection.rollback();
+            return res.status(409).json({
+                success: false,
+                message: "Vehicle is currently under maintenance"
+            });
+        }
+
+        // Update only current branch; home branch remains unchanged
+        await connection.execute(
+            `UPDATE vehicle
+             SET Current_Branch_ID = ?
+             WHERE Vehicle_ID = ?`,
+            [destinationBranchId, vehicleId]
+        );
+
+        await connection.commit();
+
+        return res.status(200).json({
+            success: true,
+            message: "Vehicle transferred successfully",
+            vehicleId,
+            previousBranchId: vehicle.Current_Branch_ID,
+            currentBranchId: destinationBranchId
+        });
+
+    } catch (error) {
+        if (connection) {
+            await connection.rollback();
+        }
+
+        console.error("Vehicle transfer error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to transfer vehicle"
+        });
+
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+};
