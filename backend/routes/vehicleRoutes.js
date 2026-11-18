@@ -33,6 +33,12 @@ router.put(
     authorizeRoles("Provider"),
     vehicleController.updateVehicle
 );
+router.post(
+    "/:id/transfer",
+    authMiddleware,
+    authorizeRoles("Provider"),
+    vehicleController.transferVehicle
+);
 
 // Delete vehicle
 router.delete(
