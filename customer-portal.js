@@ -1471,7 +1471,8 @@
     return `${days} day${days === 1 ? "" : "s"} ago`;
   }
 
-  // Map with a pickup pin and a vehicle pin that can move
+  // Map with the vehicle's pin. The database keeps one position per vehicle (no separate
+  // pickup coordinates), so the map starts at the pickup area and then shows the vehicle.
   function pinRenderer(pickup, v) {
     const el = $("#map");
     el.innerHTML = "";
@@ -1484,9 +1485,6 @@
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
-    L.marker([pickup.lat, pickup.lng], {
-      icon: L.divIcon({ className: "map-pin-home", html: "<span>Pickup</span>", iconSize: null })
-    }).addTo(map);
     map.setView([pickup.lat, pickup.lng], 13);
     let marker = null;
     let removed = false;
@@ -1498,7 +1496,7 @@
             icon: L.divIcon({ className: "map-pin-car", html: `<span class="plate plate-sm">${esc(v.plate)}</span><i></i>`, iconSize: null, iconAnchor: [0, 0] }),
             zIndexOffset: 1000
           }).addTo(map);
-          map.fitBounds(L.latLngBounds([[lat, lng], [pickup.lat, pickup.lng]]).pad(0.4), { maxZoom: 15 });
+          map.setView([lat, lng], 15);
         } else {
           marker.setLatLng([lat, lng]);
         }
@@ -1558,13 +1556,13 @@
       if (res.status === 400 || L0.gpsEnabled === false) {
         $("#trackInfo").innerHTML = `
           <div class="track-status"><strong>No GPS on this vehicle</strong><span class="muted small">Its location can't be tracked</span></div>
-          <p>It's kept at its pickup point: <strong>${where}</strong>. The pin shows the pickup area.</p>`;
+          <p>It's kept at its pickup point: <strong>${where}</strong>. The map shows the pickup area.</p>`;
         return;
       }
       if (!res.ok || L0.latitude === null || L0.latitude === undefined) {
         $("#trackInfo").innerHTML = `
           <div class="track-status"><strong>No position yet</strong></div>
-          <p>This vehicle hasn't reported a GPS position yet. The pin shows its pickup point.</p>
+          <p>This vehicle hasn't reported a GPS position yet. The map shows its pickup area.</p>
           <dl class="track-stats"><div><dt>Pickup point</dt><dd>${where}</dd></div></dl>`;
         return;
       }
@@ -1578,7 +1576,6 @@
         </div>
         <dl class="track-stats">
           <div><dt>Last updated</dt><dd>${updated ? fmtDateTime(updated) : "—"}</dd></div>
-          <div><dt>From pickup point</dt><dd>${kmBetween(pos, pickup).toFixed(1)} km</dd></div>
           <div><dt>Coordinates</dt><dd>${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}</dd></div>
           <div><dt>Pickup point</dt><dd>${where}</dd></div>
         </dl>
