@@ -238,6 +238,15 @@
       return request("/api/vehicles/recommend" + (query ? "?" + query : ""));
     },
 
+    // Add / edit vehicles (provider). GET /api/vehicles/types lists the types for the form.
+    getVehicleTypes: function () { return request("/api/vehicles/types"); },
+    addVehicle: function (body) {
+      return request("/api/vehicles/add", { method: "POST", auth: true, body: body });
+    },
+    updateVehicle: function (vehicleId, body) {
+      return request("/api/vehicles/" + encodeURIComponent(vehicleId), { method: "PUT", auth: true, body: body });
+    },
+
     // Provider (logged in as a provider)
     provider: {
       me: function () { return request("/api/providers/me", { auth: true }); },

@@ -561,3 +561,15 @@ td:last-child { white-space: nowrap; }
 .transfer-form .form-msg:empty { display: none; }
 .dw-pin i { display: block; width: 22px; height: 22px; border-radius: 50%; background: var(--violet); border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(91, 63, 217, 0.25); }
 .stat-card h3.money-neg { color: var(--red-ink); }
+
+/* Provider: add / edit vehicle dialog */
+.vehicle-dialog { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; margin: auto; }
+.vehicle-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.vehicle-form-grid .form-field input, .vehicle-form-grid .form-field select {
+    padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; min-height: 44px;
+}
+.vehicle-form-check { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; font-weight: 600; min-height: 44px; cursor: pointer; }
+.vehicle-form-check input { width: 20px; height: 20px; accent-color: var(--violet); }
+.vehicle-form [data-add-only][hidden] { display: none; }
+@media (max-width: 560px) { .vehicle-form-grid { grid-template-columns: 1fr; } }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
