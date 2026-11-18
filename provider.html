@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriveWise | Provider Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dashboard">
+
+        <aside class="sidebar">
+            <a href="provider.html" class="logo" aria-label="DriveWise provider home"><img class="logo-mark" src="logo-mark.svg" alt=""><span class="logo-word">Drive<span>Wise</span></span></a>
+            <p class="sidebar-label">Provider</p>
+            <nav class="sidebar-nav">
+                <a href="#overview" class="nav-link active">Overview</a>
+                <a href="#vehicles" class="nav-link">My Vehicles</a>
+                <a href="#transfer" class="nav-link">Branch Transfer</a>
+                <a href="#gps" class="nav-link">GPS Location</a>
+                <a href="#analytics" class="nav-link">Analytics</a>
+            </nav>
+            <div class="sidebar-footer">
+                <p>DriveWise Provider</p>
+                <small>Your vehicles and earnings</small>
+                <a href="customer-portal.html" class="customer-link">Open customer view</a>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1>Provider Dashboard</h1>
+                    <p id="providerWelcome">Your fleet on DriveWise</p>
+                </div>
+                <div class="admin-profile">
+                    <div class="profile-avatar" id="providerAvatar">P</div>
+                    <div>
+                        <strong id="providerName">Provider</strong>
+                        <small id="providerType">Provider</small>
+                    </div>
+                </div>
+            </header>
+
+            <section class="dashboard-content">
+                <div id="providerGate"></div>
+
+                <div id="providerApp" hidden>
+                    <!-- Overview -->
+                    <div class="section-heading" id="overview">
+                        <div>
+                            <h2>Overview</h2>
+                            <p>Live figures from the DriveWise database.</p>
+                        </div>
+                    </div>
+                    <div class="stats-grid" id="providerStats"></div>
+
+                    <!-- Vehicles -->
+                    <section class="panel" id="vehicles">
+                        <div class="panel-heading">
+                            <div>
+                                <h2>My Vehicles</h2>
+                                <p>Where each vehicle is and whether it reports its GPS position.</p>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Vehicle</th>
+                                        <th>Registration</th>
+                                        <th>Type</th>
+                                        <th>Current Branch</th>
+                                        <th>Home Branch</th>
+                                        <th>GPS</th>
+                                        <th>Price / Hour</th>
+                                        <th>Listing</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vehicleRows"></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- Branch transfer -->
+                    <section class="panel" id="transfer">
+                        <div class="panel-heading">
+                            <div>
+                                <h2>Branch Transfer</h2>
+                                <p>Move a vehicle to another of your branches. Only available, verified vehicles with no pending or upcoming bookings and no maintenance in progress can be moved.</p>
+                            </div>
+                        </div>
+                        <form class="inline-form" id="transferForm" novalidate>
+                            <div class="form-field">
+                                <label for="transferVehicle">Vehicle</label>
+                                <select id="transferVehicle" required></select>
+                            </div>
+                            <div class="form-field">
+                                <label>Current branch</label>
+                                <input id="transferCurrent" readonly>
+                            </div>
+                            <div class="form-field">
+                                <label for="transferTo">Move to</label>
+                                <select id="transferTo" required></select>
+                            </div>
+                            <button class="add-vehicle-btn" type="submit" id="transferBtn">Transfer vehicle</button>
+                        </form>
+                        <p class="form-msg" id="transferMsg" role="status"></p>
+                    </section>
+
+                    <!-- GPS -->
+                    <section class="panel" id="gps">
+                        <div class="panel-heading">
+                            <div>
+                                <h2>GPS Location</h2>
+                                <p>Update a vehicle's position. Customers see it on the map, and the customer on a trip can follow it live.</p>
+                            </div>
+                        </div>
+                        <form class="inline-form" id="gpsForm" novalidate>
+                            <div class="form-field">
+                                <label for="gpsVehicle">Vehicle (GPS-enabled only)</label>
+                                <select id="gpsVehicle" required></select>
+                            </div>
+                            <div class="form-field">
+                                <label for="gpsLat">Latitude</label>
+                                <input id="gpsLat" type="number" step="any" min="-90" max="90" inputmode="decimal" placeholder="28.6139">
+                            </div>
+                            <div class="form-field">
+                                <label for="gpsLng">Longitude</label>
+                                <input id="gpsLng" type="number" step="any" min="-180" max="180" inputmode="decimal" placeholder="77.2090">
+                            </div>
+                            <button class="add-vehicle-btn" type="submit" id="gpsSave">Save location</button>
+                        </form>
+                        <div class="track-row">
+                            <button class="action-btn" type="button" id="gpsHere">Use this device's location</button>
+                            <button class="action-btn" type="button" id="gpsShare" aria-pressed="false">Share this device's location live</button>
+                            <span class="note" id="gpsLast"></span>
+                        </div>
+                        <p class="form-msg" id="gpsMsg" role="status"></p>
+                        <div class="mini-map" id="gpsMap" role="img" aria-label="Map of the vehicle's last reported position"></div>
+                        <p class="note">Tip: open this page on a phone that travels with the vehicle and turn on live sharing. The phone's GPS becomes the vehicle's tracker.</p>
+                    </section>
+
+                    <!-- Analytics -->
+                    <div class="section-heading" id="analytics">
+                        <div>
+                            <h2>Analytics</h2>
+                            <p>Your earnings: payouts from DriveWise (booking value minus commission) minus maintenance costs.</p>
+                        </div>
+                    </div>
+                    <section class="panel">
+                        <div class="panel-heading">
+                            <div>
+                                <h2>Payouts and maintenance per month</h2>
+                                <p>Payouts by the month the trip ended, maintenance by service date</p>
+                            </div>
+                        </div>
+                        <div id="providerMonthly"></div>
+                    </section>
+                    <div>
+                        <section class="panel">
+                            <div class="panel-heading"><div><h2>Vehicle performance</h2><p>Booking revenue minus maintenance, per vehicle</p></div></div>
+                            <div class="table-wrapper">
+                                <table>
+                                    <thead><tr><th>Vehicle</th><th>Bookings</th><th>Hours</th><th>Revenue</th><th>Maintenance</th><th>Net</th></tr></thead>
+                                    <tbody id="providerVehiclePerf"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                        <section class="panel">
+                            <div class="panel-heading"><div><h2>By vehicle type</h2><p>Booking revenue per category</p></div></div>
+                            <div class="table-wrapper">
+                                <table>
+                                    <thead><tr><th>Type</th><th>Bookings</th><th>Revenue</th></tr></thead>
+                                    <tbody id="providerCategories"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                    <p class="note">Net earnings is a simplified measure: it doesn't include costs that aren't recorded in DriveWise, such as fuel, insurance premiums or staff.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="config.js"></script>
+    <script src="api.js"></script>
+    <script src="dw-charts.js"></script>
+    <script src="provider.js"></script>
+</body>
+</html>

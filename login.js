@@ -19,13 +19,17 @@
       return /^(index|admin)/.test(next) ? next : "index.html";
     }
     if (user.userRole === "Customer") return nextPage("customer-portal.html");
-    return null; // Provider: no provider dashboard yet
+    if (user.userRole === "Provider") {
+      const next = nextPage("provider.html");
+      return next.startsWith("provider") ? next : "provider.html";
+    }
+    return null;
   }
 
   function goHome(user) {
     const page = homeFor(user);
     if (page) { location.href = page; return; }
-    status.innerHTML = `Logged in as <strong>${escapeHtml(user.name)}</strong> (provider). The provider dashboard isn't part of this website yet, so you can browse vehicles as a guest. <button type="button" class="linkbtn" id="logoutBtn">Log out</button>`;
+    status.innerHTML = `Logged in as <strong>${escapeHtml(user.name)}</strong>. This account type doesn't have a dashboard here. <button type="button" class="linkbtn" id="logoutBtn">Log out</button>`;
     $("#logoutBtn").addEventListener("click", () => { DW_API.logout(); location.reload(); });
   }
 

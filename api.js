@@ -80,6 +80,9 @@
       var token = getToken();
       if (!token) throw new ApiError("Please log in to continue.", 401);
       headers.Authorization = "Bearer " + token;
+    } else if (options.authOptional && getToken()) {
+      // Public route that shows more to logged-in users (e.g. live location during your trip)
+      headers.Authorization = "Bearer " + getToken();
     }
 
     var controller = new AbortController();
@@ -184,6 +187,64 @@
     getVehicles: function () { return request("/api/vehicles"); },
     getBookedSlots: function () { return request("/api/vehicles/booked-slots"); },
 
+    getVehicle: function (vehicleId) { return request("/api/vehicles/" + encodeURIComponent(vehicleId)); },
+
+    // GPS location
+    // GET /api/vehicles/:id/location. The backend answers 400 when GPS is off, 404 when no
+    // position has been reported and 403 when the location is private; those come back as
+    // { ok: false, status, message, location } instead of throwing, so pages can explain them.
+    getVehicleLocation: async function (vehicleId) {
+      try {
+        var data = await request("/api/vehicles/" + encodeURIComponent(vehicleId) + "/location", { authOptional: true });
+        return { ok: true, status: 200, message: data.message, location: data.location };
+      } catch (e) {
+        if (e.status === 400 || e.status === 403 || e.status === 404) {
+          var body = e.data || {};
+          return { ok: false, status: e.status, message: body.message || e.message, location: body.location || null, onTrip: Boolean(body.onTrip) };
+        }
+        throw e;
+      }
+    },
+    updateVehicleLocation: function (vehicleId, latitude, longitude) {
+      return request("/api/vehicles/" + encodeURIComponent(vehicleId) + "/location", {
+        method: "PUT", auth: true, body: { latitude: latitude, longitude: longitude }
+      });
+    },
+
+    // Branches and transfer
+    getBranches: function (providerId) {
+      return request("/api/branches" + (providerId ? "?providerId=" + encodeURIComponent(providerId) : ""));
+    },
+    getVehicleBranches: function (vehicleId) {
+      return request("/api/vehicles/" + encodeURIComponent(vehicleId) + "/branches");
+    },
+    // POST /api/vehicles/:id/transfer (provider who owns it, or admin)
+    transferVehicle: function (vehicleId, destinationBranchId) {
+      return request("/api/vehicles/" + encodeURIComponent(vehicleId) + "/transfer", {
+        method: "POST", auth: true, body: { destinationBranchId: destinationBranchId }
+      });
+    },
+
+    // GET /api/vehicles/recommend. prefs (all optional): { city, maxPrice, category, minSeats,
+    // fuelType, minRating, start, end, limit }; start/end as Date objects
+    getRecommendations: function (prefs) {
+      var params = new URLSearchParams();
+      Object.keys(prefs || {}).forEach(function (key) {
+        var value = prefs[key];
+        if (value === undefined || value === null || value === "") return;
+        params.set(key, value instanceof Date ? toSqlDateTime(value).slice(0, 16) : String(value));
+      });
+      var query = params.toString();
+      return request("/api/vehicles/recommend" + (query ? "?" + query : ""));
+    },
+
+    // Provider (logged in as a provider)
+    provider: {
+      me: function () { return request("/api/providers/me", { auth: true }); },
+      bookings: function () { return request("/api/providers/bookings", { auth: true }); },
+      analytics: function () { return request("/api/providers/me/analytics", { auth: true }); }
+    },
+
     // Bookings (customer)
     createBooking: function (vehicleId, start, end) {
       return request("/api/bookings", {
@@ -201,6 +262,13 @@
     admin: {
       test: function () { return request("/api/admin/test", { auth: true }); },
       dashboard: function () { return request("/api/admin/dashboard", { auth: true }); },
+      // Profitability analytics (Feature 4)
+      profitability: {
+        bookings: function () { return request("/api/admin/profitability/bookings", { auth: true }); },
+        providers: function () { return request("/api/admin/profitability/providers", { auth: true }); },
+        monthly: function () { return request("/api/admin/profitability/monthly", { auth: true }); },
+        vehicles: function () { return request("/api/admin/profitability/vehicles", { auth: true }); }
+      },
       users: function () { return request("/api/admin/users", { auth: true }); },
       vehicles: function () { return request("/api/admin/vehicles", { auth: true }); },
       bookings: function () { return request("/api/admin/bookings", { auth: true }); },
