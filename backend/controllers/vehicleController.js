@@ -2,9 +2,9 @@
 const pool = require("../config/db");
 
 // ADD VEHICLE
+
 exports.addVehicle = async (req, res) => {
     try {
-        // Only Providers can add vehicles
         if (req.user.userRole !== "Provider") {
             return res.status(403).json({
                 message: "Access denied. Only providers can add vehicles."
@@ -29,7 +29,6 @@ exports.addVehicle = async (req, res) => {
             city
         } = req.body;
 
-        // Required field validation
         if (
             !typeId ||
             pricePerHour === undefined ||
@@ -41,7 +40,6 @@ exports.addVehicle = async (req, res) => {
             });
         }
 
-        // Automatically identify the logged-in Provider
         const [providerRows] = await pool.execute(
             `SELECT Provider_ID
              FROM provider
@@ -57,7 +55,6 @@ exports.addVehicle = async (req, res) => {
 
         const ownProviderId = providerRows[0].Provider_ID;
 
-        // Insert vehicle
         const sql = `
             INSERT INTO vehicle (
                 Provider_ID,
@@ -119,10 +116,9 @@ exports.addVehicle = async (req, res) => {
 
 
 // GET ALL VEHICLES
+
 exports.getAllVehicles = async (req, res) => {
     try {
-        // Vehicle columns plus its type and the provider listing it,
-        // so the customer portal can show seats, fuel and who owns it.
         const sql = `
             SELECT
                 V.Vehicle_ID,
@@ -153,12 +149,15 @@ exports.getAllVehicles = async (req, res) => {
                 R.Avg_Rating AS Provider_Rating,
                 COALESCE(R.Review_Count, 0) AS Provider_Review_Count
             FROM vehicle V
-            LEFT JOIN vehicle_type VT ON V.Type_ID = VT.Type_ID
-            LEFT JOIN provider P ON V.Provider_ID = P.Provider_ID
+            LEFT JOIN vehicle_type VT
+                ON V.Type_ID = VT.Type_ID
+            LEFT JOIN provider P
+                ON V.Provider_ID = P.Provider_ID
             LEFT JOIN (
-                SELECT Provider_ID,
-                       ROUND(AVG(Rating), 1) AS Avg_Rating,
-                       COUNT(*) AS Review_Count
+                SELECT
+                    Provider_ID,
+                    ROUND(AVG(Rating), 1) AS Avg_Rating,
+                    COUNT(*) AS Review_Count
                 FROM review
                 WHERE Review_Type = 'Customer_To_Provider'
                 GROUP BY Provider_ID
@@ -184,10 +183,161 @@ exports.getAllVehicles = async (req, res) => {
 };
 
 
-// GET BOOKED TIME SLOTS (public)
-// Returns only vehicle ID and start/end times of upcoming Pending/Confirmed
-// bookings, so the customer portal can show which vehicles are free.
-// No customer details are exposed.
+// SMART VEHICLE RECOMMENDATION - FEATURE 3
+
+exports.getRecommendedVehicles = async (req, res) => {
+    try {
+        const {
+            city,
+            maxPrice,
+            category,
+            minSeats,
+            fuelType,
+            minRating
+        } = req.query;
+
+        const conditions = [
+            "V.Vehicle_Verification_Status = 'Verified'",
+            "V.Status = 'Available'"
+        ];
+
+        const values = [];
+
+        // Budget filter
+        if (maxPrice !== undefined) {
+            const price = Number(maxPrice);
+
+            if (!Number.isFinite(price) || price < 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid maximum price"
+                });
+            }
+
+            conditions.push("V.Price_Per_Hour <= ?");
+            values.push(price);
+        }
+
+        // City filter
+        if (city) {
+            conditions.push("V.City LIKE ?");
+            values.push(`%${city.trim()}%`);
+        }
+
+        // Vehicle category filter
+        if (category) {
+            conditions.push("VT.Vehicle_Category = ?");
+            values.push(category.trim());
+        }
+
+        // Minimum seating capacity
+        if (minSeats !== undefined) {
+            const seats = Number(minSeats);
+
+            if (!Number.isInteger(seats) || seats < 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid seating capacity"
+                });
+            }
+
+            conditions.push("VT.Seating_Capacity >= ?");
+            values.push(seats);
+        }
+
+        // Fuel type filter
+        if (fuelType) {
+            conditions.push("VT.Fuel_Type = ?");
+            values.push(fuelType.trim());
+        }
+
+        // Minimum provider rating
+        if (minRating !== undefined) {
+            const rating = Number(minRating);
+
+            if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Rating must be between 0 and 5"
+                });
+            }
+
+            conditions.push("COALESCE(R.Avg_Rating, 0) >= ?");
+            values.push(rating);
+        }
+
+        const sql = `
+            SELECT
+                V.Vehicle_ID,
+                V.Provider_ID,
+                V.Type_ID,
+                V.Brand,
+                V.Model,
+                V.Manufacture_Year,
+                V.Price_Per_Hour,
+                V.Status,
+                V.City,
+                V.Pickup_Address,
+                V.Vehicle_Image_URL,
+                VT.Type_Name,
+                VT.Vehicle_Category,
+                VT.Seating_Capacity,
+                VT.Fuel_Type,
+                P.Display_Name AS Provider_Name,
+                COALESCE(R.Avg_Rating, 0) AS Provider_Rating,
+                COALESCE(R.Review_Count, 0) AS Provider_Review_Count
+            FROM vehicle V
+            LEFT JOIN vehicle_type VT
+                ON V.Type_ID = VT.Type_ID
+            LEFT JOIN provider P
+                ON V.Provider_ID = P.Provider_ID
+            LEFT JOIN (
+                SELECT
+                    Provider_ID,
+                    ROUND(AVG(Rating), 1) AS Avg_Rating,
+                    COUNT(*) AS Review_Count
+                FROM review
+                WHERE Review_Type = 'Customer_To_Provider'
+                GROUP BY Provider_ID
+            ) R ON V.Provider_ID = R.Provider_ID
+            WHERE ${conditions.join(" AND ")}
+            ORDER BY
+                Provider_Rating DESC,
+                Provider_Review_Count DESC,
+                V.Price_Per_Hour ASC
+        `;
+
+        const [vehicles] = await pool.execute(sql, values);
+
+        return res.status(200).json({
+            success: true,
+            message: "Vehicle recommendations fetched successfully",
+            count: vehicles.length,
+            filters: {
+                city: city || null,
+                maxPrice: maxPrice !== undefined ? Number(maxPrice) : null,
+                category: category || null,
+                minSeats: minSeats !== undefined ? Number(minSeats) : null,
+                fuelType: fuelType || null,
+                minRating: minRating !== undefined ? Number(minRating) : null
+            },
+            recommendations: vehicles
+        });
+
+    } catch (error) {
+        console.error("Vehicle recommendation error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch vehicle recommendations"
+        });
+    }
+};
+
+
+
+// GET BOOKED TIME SLOTS
+
 exports.getBookedSlots = async (req, res) => {
     try {
         const [slots] = await pool.execute(
@@ -216,9 +366,9 @@ exports.getBookedSlots = async (req, res) => {
 
 
 // DELETE VEHICLE
+
 exports.deleteVehicle = async (req, res) => {
     try {
-        // Only Providers can delete vehicles
         if (req.user.userRole !== "Provider") {
             return res.status(403).json({
                 message: "Access denied. Only providers can delete vehicles."
@@ -227,7 +377,6 @@ exports.deleteVehicle = async (req, res) => {
 
         const { id } = req.params;
 
-        // Check vehicle ownership
         const [vehicleRows] = await pool.execute(
             `SELECT V.Vehicle_ID
              FROM vehicle V
@@ -266,6 +415,7 @@ exports.deleteVehicle = async (req, res) => {
     }
 };
 
+
 // GET VEHICLE GPS LOCATION
 
 exports.getVehicleLocation = async (req, res) => {
@@ -274,14 +424,12 @@ exports.getVehicleLocation = async (req, res) => {
         const userId = req.user.userId;
         const userRole = req.user.userRole;
 
-        // Only Providers and Admins can access GPS coordinates
         if (!["Provider", "Admin"].includes(userRole)) {
             return res.status(403).json({
                 message: "Access denied. You cannot view vehicle GPS locations."
             });
         }
 
-        // Fetch vehicle and its provider ownership
         const [vehicles] = await pool.execute(
             `SELECT
                 V.Vehicle_ID,
@@ -305,7 +453,6 @@ exports.getVehicleLocation = async (req, res) => {
 
         const vehicle = vehicles[0];
 
-        // Providers can only view their own vehicles
         if (
             userRole === "Provider" &&
             Number(vehicle.User_ID) !== Number(userId)
@@ -351,6 +498,7 @@ exports.getVehicleLocation = async (req, res) => {
 
 
 // UPDATE VEHICLE GPS LOCATION
+
 exports.updateVehicleLocation = async (req, res) => {
     try {
         if (req.user.userRole !== "Provider") {
@@ -382,7 +530,7 @@ exports.updateVehicleLocation = async (req, res) => {
              FROM vehicle V
              JOIN provider P ON V.Provider_ID = P.Provider_ID
              WHERE V.Vehicle_ID = ?
-             AND P.User_ID = ?`,
+               AND P.User_ID = ?`,
             [id, req.user.userId]
         );
 
@@ -422,9 +570,9 @@ exports.updateVehicleLocation = async (req, res) => {
 
 
 // UPDATE VEHICLE
+
 exports.updateVehicle = async (req, res) => {
     try {
-        // Only Providers can update vehicles
         if (req.user.userRole !== "Provider") {
             return res.status(403).json({
                 message: "Access denied. Only providers can update vehicles."
@@ -433,7 +581,6 @@ exports.updateVehicle = async (req, res) => {
 
         const { id } = req.params;
 
-        // Check vehicle ownership
         const [vehicleRows] = await pool.execute(
             `SELECT V.Vehicle_ID
              FROM vehicle V
