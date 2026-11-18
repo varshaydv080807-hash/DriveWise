@@ -5,6 +5,7 @@ const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 const authorizeRoles = require("../middleware/authorizeRoles");
 const adminController = require("../controllers/adminController");
+const analyticsController = require("../controllers/analyticsController");
 
 // All Admin routes require authentication and Admin role
 router.use(authMiddleware);
@@ -32,4 +33,6 @@ router.get("/profitability/bookings", adminController.getBookingProfitability);
 router.get("/profitability/providers", adminController.getProviderProfitability);
 
 router.get("/profitability/monthly", adminController.getMonthlyProfitability);
+
+router.get("/profitability/vehicles", analyticsController.getVehicleProfitability);
 module.exports = router;

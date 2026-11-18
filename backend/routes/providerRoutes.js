@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const providerController = require("../controllers/providerController");
+const analyticsController = require("../controllers/analyticsController");
 const authMiddleware = require("../middleware/authMiddleware");
 
 router.use(authMiddleware);
@@ -11,6 +12,9 @@ router.put("/me", providerController.updateProviderProfile);
 router.get("/me/company", providerController.getCompanyDetails);
 router.put("/me/company", providerController.updateCompanyDetails);
 router.get("/me/individual", providerController.getIndividualDetails);
+
+// Feature 4: the logged-in provider's own profitability analytics
+router.get("/me/analytics", analyticsController.getMyProviderAnalytics);
 
 // Provider booking management (must come before the "/:id" routes)
 router.get("/bookings", providerController.getProviderBookings);

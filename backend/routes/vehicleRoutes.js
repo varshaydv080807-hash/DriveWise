@@ -5,6 +5,7 @@ const router = express.Router();
 const vehicleController = require("../controllers/vehicleController");
 const authMiddleware = require("../middleware/authMiddleware");
 const authorizeRoles = require("../middleware/authorizeRoles");
+const optionalAuth = require("../middleware/optionalAuth");
 
 // Add a new vehicle
 router.post(
@@ -36,7 +37,7 @@ router.put(
 router.post(
     "/:id/transfer",
     authMiddleware,
-    authorizeRoles("Provider"),
+    authorizeRoles("Provider", "Admin"),
     vehicleController.transferVehicle
 );
 
@@ -48,10 +49,10 @@ router.delete(
     vehicleController.deleteVehicle
 );
 
-// Get vehicle GPS location
+// Get vehicle GPS location (public; logging in shows more, e.g. during your own trip)
 router.get(
     "/:id/location",
-    authMiddleware,
+    optionalAuth,
     vehicleController.getVehicleLocation
 );
 
@@ -62,5 +63,10 @@ router.put(
     authorizeRoles("Provider"),
     vehicleController.updateVehicleLocation
 );
+
+// Vehicle details and branches (public). Kept after the fixed paths above
+// ("/recommend", "/booked-slots") so those aren't read as an ID.
+router.get("/:id", vehicleController.getVehicleById);
+router.get("/:id/branches", vehicleController.getVehicleBranches);
 
 module.exports = router;
