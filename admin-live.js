@@ -32,6 +32,7 @@
     return node;
   }
 
+  const escapeHtml = (x) => String(x ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const badge = (text, cls) => el("span", { className: `status ${cls}` }, text);
   const bookingClass = (s) => ({ Pending: "pending", Confirmed: "confirmed", Completed: "completed", Cancelled: "cancelled" }[s] || "pending");
 
@@ -151,8 +152,10 @@
     hideButton("openVehicleForm"); // providers add vehicles; the admin API can only verify them
     loadingRow(tbody, 9);
     // /api/vehicles includes type and provider names; /api/admin/vehicles proves admin access
-    const [, all] = await Promise.all([DW_API.admin.vehicles(), DW_API.getVehicles()]);
-    const vehicles = all.vehicles;
+    const [, all, branchRes] = await Promise.all([DW_API.admin.vehicles(), DW_API.getVehicles(), DW_API.getBranches()]);
+    let vehicles = all.vehicles;
+    const branches = branchRes.branches;
+    const branchById = (id) => branches.find((x) => x.Branch_ID === id);
 
     const catSelect = $("#categoryFilter");
     const existing = new Set($$("option", catSelect).map((o) => o.value || o.textContent));
@@ -171,6 +174,9 @@
       cell.append(badge(ver === "Pending" ? "Needs review" : ver, cls));
       if (ver !== "Verified") cell.append(el("button", { type: "button", className: "action-btn", dataset: { verify: "Verified", id: v.Vehicle_ID } }, "Approve"));
       if (ver !== "Rejected") cell.append(el("button", { type: "button", className: "action-btn delete-btn", dataset: { verify: "Rejected", id: v.Vehicle_ID } }, "Reject"));
+      if (branches.some((x) => x.Provider_ID === v.Provider_ID && x.Branch_ID !== v.Current_Branch_ID)) {
+        cell.append(el("button", { type: "button", className: "action-btn", dataset: { transfer: v.Vehicle_ID } }, "Transfer"));
+      }
       return cell;
     }
 
@@ -186,7 +192,9 @@
             el("td", {}, v.Registration_No || "—"),
             el("td", {}, categoryOf(v)),
             el("td", {}, v.Provider_Name || `Provider ${v.Provider_ID}`),
-            el("td", {}, [v.Pickup_Address, v.City].filter(Boolean).join(", ") || "—"),
+            el("td", {}, v.Current_Branch_ID && branchById(v.Current_Branch_ID)
+              ? `${branchById(v.Current_Branch_ID).Branch_Name}, ${branchById(v.Current_Branch_ID).City}`
+              : ([v.Pickup_Address, v.City].filter(Boolean).join(", ") || "—")),
             el("td", {}, rupees(v.Price_Per_Hour)),
             el("td", {}, v.Fuel_Type || "—"),
             el("td", {}, badge(st, st === "Available" ? "available-status" : st === "Booked" ? "booked-status" : "maintenance-status")),
@@ -196,8 +204,53 @@
       if (typeof filterVehicles === "function") filterVehicles();
     }
 
+    // Transfer dialog: PUT /api/vehicles/:id/transfer (admins may move any vehicle
+    // between its own provider's branches)
+    const dialog = el("dialog", { className: "transfer-dialog", "aria-labelledby": "transferTitle" });
+    document.body.append(dialog);
+    function openTransfer(v) {
+      const options = branches.filter((x) => x.Provider_ID === v.Provider_ID && x.Branch_ID !== v.Current_Branch_ID);
+      const current = v.Current_Branch_ID && branchById(v.Current_Branch_ID);
+      dialog.innerHTML = `
+        <form method="dialog" class="transfer-form">
+          <h2 id="transferTitle">Transfer ${escapeHtml(v.Brand)} ${escapeHtml(v.Model)}</h2>
+          <p class="note">${escapeHtml(v.Provider_Name || "")} · now at ${escapeHtml(current ? `${current.Branch_Name}, ${current.City}` : "no branch")}</p>
+          <div class="form-field">
+            <label for="transferTo">Move to</label>
+            <select id="transferTo">${options.map((x) => `<option value="${x.Branch_ID}">${escapeHtml(x.Branch_Name)}, ${escapeHtml(x.City)}</option>`).join("")}</select>
+          </div>
+          <p class="form-msg err" id="transferErr" role="alert"></p>
+          <div class="form-actions">
+            <button class="action-btn" value="cancel" type="submit">Cancel</button>
+            <button class="add-vehicle-btn" type="button" id="transferGo">Transfer</button>
+          </div>
+        </form>`;
+      dialog.showModal();
+      dialog.querySelector("#transferGo").addEventListener("click", async () => {
+        const go = dialog.querySelector("#transferGo");
+        go.disabled = true;
+        go.textContent = "Transferring…";
+        try {
+          await DW_API.transferVehicle(v.Vehicle_ID, Number(dialog.querySelector("#transferTo").value));
+          vehicles = (await DW_API.getVehicles()).vehicles;
+          dialog.close();
+          render();
+        } catch (err) {
+          dialog.querySelector("#transferErr").textContent = err.message;
+          go.disabled = false;
+          go.textContent = "Transfer";
+        }
+      });
+    }
+
     // Capture phase so admin.js's own edit/delete handler never sees these clicks
     tbody.addEventListener("click", async (e) => {
+      const tbtn = e.target.closest("button[data-transfer]");
+      if (tbtn) {
+        e.stopPropagation();
+        openTransfer(vehicles.find((x) => String(x.Vehicle_ID) === tbtn.dataset.transfer));
+        return;
+      }
       const btn = e.target.closest("button[data-verify]");
       if (!btn) return;
       e.stopPropagation();
@@ -312,12 +365,100 @@
     filterMessage.textContent = `Showing all ${rows.length} booking(s). Data source: DriveWise database.`; // eslint-disable-line no-undef
   }
 
+  /* ---------------- Analytics (admin-analytics.html) ---------------- */
+  const REVENUE_COLOR = "#5B3FD9"; // single series: brand violet (validated with the dataviz checker)
+  // Analytics shows whole rupees
+  const rupees0 = (n) => "₹" + Math.round(Number(n || 0)).toLocaleString("en-IN");
+  const money = (n) => `<span class="${Number(n) < 0 ? "money-neg" : ""}">${Number(n) < 0 ? "−" : ""}${rupees0(Math.abs(Number(n)))}</span>`;
+
+  // Uses GET /api/admin/profitability/{monthly,providers,vehicles}
+  async function loadAnalytics() {
+    const [monthlyRes, providerRes, vehicleRes] = await Promise.all([
+      DW_API.admin.profitability.monthly(),
+      DW_API.admin.profitability.providers(),
+      DW_API.admin.profitability.vehicles()
+    ]);
+    const num = (x) => Number(x) || 0;
+    const monthly = monthlyRes.monthlyData
+      .filter((m) => m.Payment_Month)
+      .map((m) => ({ Month: m.Payment_Month, Net: num(m.Net_Collected), Refunds: num(m.Successful_Refunds) }));
+    const providers = providerRes.providers.map((p) => {
+      const payouts = num(p.Completed_Payout) + num(p.Pending_Payout);
+      return { ...p, Payouts: payouts, Net_Earnings: payouts - num(p.Maintenance_Expense) };
+    });
+    const sum = (rows, key) => rows.reduce((t, r) => t + num(r[key]), 0);
+
+    // Summary cards
+    const cards = $$("#analyticsStats .stat-card");
+    const setCard = (i, value, note) => { $("h3", cards[i]).textContent = value; if (note) $(".stat-note", cards[i]).textContent = note; };
+    const completed = sum(providers, "Completed_Payout"), pending = sum(providers, "Pending_Payout");
+    setCard(0, rupees0(sum(monthly, "Net")), "Completed payments minus refunds");
+    setCard(1, rupees0(sum(providers, "Recorded_Commission")), "DriveWise's share of bookings");
+    setCard(2, rupees0(completed + pending), `${rupees0(completed)} paid, ${rupees0(pending)} pending`);
+    setCard(3, rupees0(sum(providers, "Maintenance_Expense")), "Completed maintenance, paid by providers");
+
+    // Revenue chart with a month range (filtered in the browser)
+    const fromSel = $("#revFrom"), toSel = $("#revTo");
+    const opts = monthly.map((m) => `<option value="${m.Month}">${DWCharts.monthLabel(m.Month)}</option>`).join("");
+    fromSel.innerHTML = opts; toSel.innerHTML = opts;
+    if (monthly.length) { fromSel.value = monthly[0].Month; toSel.value = monthly[monthly.length - 1].Month; }
+
+    function drawRevenue() {
+      const from = fromSel.value, to = toSel.value;
+      if (from && to && from > to) { $("#revenueSub").textContent = "Choose a start month before the end month."; return; }
+      const rows = monthly.filter((m) => (!from || m.Month >= from) && (!to || m.Month <= to));
+      $("#revenueSub").textContent = `${rupees0(sum(rows, "Net"))} from completed payments, minus refunds`;
+      DWCharts.bars($("#revenueChart"), {
+        label: "Revenue per month",
+        categoryLabel: "Month",
+        categories: rows.map((m) => DWCharts.monthLabel(m.Month)),
+        series: [{ name: "Revenue", color: REVENUE_COLOR, values: rows.map((m) => m.Net) }],
+        format: rupees0
+      });
+      const refunds = sum(rows, "Refunds");
+      $("#revenueMethods").textContent = refunds ? `Refunds in this period: ${rupees0(refunds)}` : "";
+    }
+    fromSel.addEventListener("change", drawRevenue);
+    toSel.addEventListener("change", drawRevenue);
+    drawRevenue();
+
+    // Provider earnings
+    const maxValue = Math.max(1, ...providers.map((p) => num(p.Confirmed_Or_Completed_Booking_Value)));
+    $("#providerEarnings").innerHTML = providers
+      .sort((a, b) => num(b.Confirmed_Or_Completed_Booking_Value) - num(a.Confirmed_Or_Completed_Booking_Value))
+      .map((p) => `<tr>
+        <td>${escapeHtml(p.Display_Name)}</td>
+        <td>${escapeHtml(p.Provider_Type)}</td>
+        <td>${num(p.Total_Bookings)}</td>
+        <td><div class="databar"><i style="width:${Math.round((num(p.Confirmed_Or_Completed_Booking_Value) / maxValue) * 90)}px"></i><span>${rupees0(p.Confirmed_Or_Completed_Booking_Value)}</span></div></td>
+        <td>${rupees0(p.Recorded_Commission)}</td>
+        <td>${rupees0(p.Payouts)}</td>
+        <td>${rupees0(p.Maintenance_Expense)}</td>
+        <td>${money(p.Net_Earnings)}</td>
+      </tr>`).join("") || `<tr><td colspan="8" class="live-loading">No providers yet.</td></tr>`;
+
+    // Vehicle and category performance
+    const top = vehicleRes.vehicles.filter((v) => v.Bookings > 0).slice(0, 8);
+    $("#topVehicles").innerHTML = top.map((v) => `<tr>
+        <td>${escapeHtml(v.Brand)} ${escapeHtml(v.Model)}</td>
+        <td>${escapeHtml(v.Type_Name)}</td>
+        <td>${v.Bookings}</td>
+        <td>${rupees0(v.Booking_Revenue)}</td>
+        <td>${money(v.Net_Contribution)}</td>
+      </tr>`).join("") || `<tr><td colspan="5" class="live-loading">No bookings yet.</td></tr>`;
+
+    $("#categoryPerf").innerHTML = vehicleRes.categories.map((c) => `<tr>
+        <td>${escapeHtml(c.Vehicle_Category)}</td><td>${c.Vehicles}</td><td>${c.Bookings}</td><td>${rupees0(c.Booking_Revenue)}</td>
+      </tr>`).join("");
+  }
+
   const LOADERS = {
     index: loadDashboard,
     admin_vehicles: loadVehicles,
     "admin-bookings": loadBookings,
     "admin-customer": loadCustomers,
-    "admin-reports": loadReports
+    "admin-reports": loadReports,
+    "admin-analytics": loadAnalytics
   };
 
   /* ---------------- Start ---------------- */

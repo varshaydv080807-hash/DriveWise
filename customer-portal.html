@@ -70,6 +70,34 @@
         </form>
       </div>
 
+      <!-- Smart recommendations (live data only; shown by customer-portal.js) -->
+      <section class="recs" id="recs" aria-labelledby="recsTitle" hidden>
+        <div class="recs-head">
+          <div>
+            <h2 id="recsTitle">Recommended for you</h2>
+            <p class="muted">Tell us what you need. We score every vehicle that's free for your dates and show the best matches.</p>
+          </div>
+        </div>
+        <form class="recs-form" id="recsForm" novalidate>
+          <label class="field"><span class="field-label">City</span>
+            <select name="city" id="recCity"><option value="">Any city</option></select></label>
+          <label class="field"><span class="field-label">Budget per hour</span>
+            <input name="budget" id="recBudget" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 150"></label>
+          <label class="field"><span class="field-label">Vehicle type</span>
+            <select name="category" id="recCategory"><option value="">Any type</option></select></label>
+          <label class="field"><span class="field-label">Seats</span>
+            <select name="seats" id="recSeats">
+              <option value="">Any</option><option value="2">2 or more</option><option value="4">4 or more</option>
+              <option value="5">5 or more</option><option value="7">7 or more</option>
+            </select></label>
+          <label class="field"><span class="field-label">Fuel</span>
+            <select name="fuel" id="recFuel"><option value="">Any fuel</option></select></label>
+          <button class="btn btn-primary" type="submit" id="recSubmit">Get recommendations</button>
+        </form>
+        <p class="form-error" id="recError" role="alert" hidden></p>
+        <div id="recResults" aria-live="polite"></div>
+      </section>
+
       <div class="results-wrap" id="results">
         <aside class="filters" aria-label="Filters">
           <div class="filters-head">

@@ -325,6 +325,7 @@
       deposit: 0,
       kmLimit: null,
       gps: Number(row.GPS_Enabled) === 1,
+      category: row.Vehicle_Category || null,
       ownerId: "P" + row.Provider_ID,
       locationId: locId,
       features,
@@ -632,7 +633,7 @@
       v.transmission ? `<li>${esc(v.transmission)}</li>` : "",
       `<li>${v.seats} seats</li>`,
       v.kmLimit ? `<li>${v.kmLimit} km/day free</li>` : "",
-      LIVE && v.gps ? `<li>GPS tracked</li>` : ""
+      LIVE && v.gps ? `<li class="spec-hi">GPS tracked</li>` : ""
     ].join("");
   }
 
@@ -768,6 +769,9 @@
         </div>
         <ul class="specs">${specsHTML(v)}</ul>
         <ul class="feature-list">${v.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+        ${LIVE ? `<p class="sheet-gps">${v.gps
+          ? `<span class="gps-dot" aria-hidden="true"></span>GPS tracked. <button class="linkbtn" type="button" data-locate="${v.id}">View location</button>`
+          : `No GPS on this vehicle. It's kept at its pickup point. <button class="linkbtn" type="button" data-locate="${v.id}">View pickup area</button>`}</p>` : ""}
       </div>
 
       <form id="bookForm" novalidate>
@@ -1306,6 +1310,7 @@
   function openTracker(id) {
     const b = byId(store.bookings, id);
     if (!b) return;
+    if (LIVE) { openLocationView(vehicleOf(b.vehicleId), b); return; }
     const v = vehicleOf(b.vehicleId);
     const d = driverOf(b.driverId);
     const s = tripStatus(b);
@@ -1316,8 +1321,6 @@
     $("#trackSub").textContent = live
       ? `On trip until ${fmtDateTime(b.dropoff)}. Location updates every few seconds.`
       : `Trip starts ${fmtDateTime(b.pickup)}. Live tracking switches on at pickup.`;
-    // The backend has no live GPS feed yet, so movement on the map is simulated
-    if (LIVE) $("#trackSub").textContent += " (Demo: the route shown is simulated.)";
 
     if (sheet.open) sheet.close();
     tracker.showModal();
@@ -1448,6 +1451,143 @@
       recenter() {},
       destroy() { el.innerHTML = ""; }
     };
+  }
+
+  /* ==================================================================
+     Live mode: real GPS location from the database
+     GET /api/vehicles/:id/location, refreshed every 15 seconds.
+     During a trip only the customer on it, the owner and admins see the position.
+  ================================================================== */
+  const LOCATION_REFRESH_MS = 15000;
+
+  function timeAgo(date) {
+    const secs = Math.max(0, Math.round((Date.now() - date) / 1000));
+    if (secs < 45) return "just now";
+    const mins = Math.round(secs / 60);
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+    const days = Math.round(hours / 24);
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  }
+
+  // Map with the vehicle's pin. The database keeps one position per vehicle (no separate
+  // pickup coordinates), so the map starts at the pickup area and then shows the vehicle.
+  function pinRenderer(pickup, v) {
+    const el = $("#map");
+    el.innerHTML = "";
+    if (!window.L) {
+      el.innerHTML = `<p class="map-note">The map couldn't load. The vehicle's position is listed beside it.</p>`;
+      return { setVehicle() {}, recenter() {}, destroy() { el.innerHTML = ""; } };
+    }
+    const map = L.map(el, { zoomControl: true, attributionControl: true });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+    map.setView([pickup.lat, pickup.lng], 13);
+    let marker = null;
+    let removed = false;
+    setTimeout(() => { if (!removed) map.invalidateSize(); }, 60);
+    return {
+      setVehicle(lat, lng) {
+        if (!marker) {
+          marker = L.marker([lat, lng], {
+            icon: L.divIcon({ className: "map-pin-car", html: `<span class="plate plate-sm">${esc(v.plate)}</span><i></i>`, iconSize: null, iconAnchor: [0, 0] }),
+            zIndexOffset: 1000
+          }).addTo(map);
+          map.setView([lat, lng], 15);
+        } else {
+          marker.setLatLng([lat, lng]);
+        }
+      },
+      recenter() { if (marker) map.setView(marker.getLatLng(), 15); },
+      destroy() { removed = true; map.stop(); map.remove(); }
+    };
+  }
+
+  function openLocationView(v, b) {
+    if (!v) return;
+    const loc = locationOf(v.locationId);
+    const s = b ? tripStatus(b) : null;
+    $("#trackTitle").textContent = `${vName(v)}, ${v.plate}`;
+    $("#trackSub").textContent = b
+      ? (s === "active" ? `On trip until ${fmtDateTime(b.dropoff)}.` : `Trip starts ${fmtDateTime(b.pickup)}.`) +
+        ` Position refreshes every ${LOCATION_REFRESH_MS / 1000} seconds.`
+      : `Pickup point: ${loc.name}, ${loc.city}.`;
+    if (sheet.open) sheet.close();
+    tracker.showModal();
+    $("#trackInfo").innerHTML = `<div class="loading-row"><span class="spinner" aria-hidden="true"></span>Finding the vehicle…</div>`;
+
+    const pickup = { lat: loc.lat, lng: loc.lng };
+    track = { v, b, renderer: pinRenderer(pickup, v), timer: null, ticker: null, last: null };
+
+    async function refresh() {
+      let res;
+      try {
+        res = await DW_API.getVehicleLocation(v.dbId);
+      } catch (e) {
+        if (!track) return;
+        if (!track.last) $("#trackInfo").innerHTML = `<p class="form-error">Couldn't load the location: ${esc(e.message)}</p>`;
+        return;
+      }
+      if (!track) return; // closed while loading
+      track.last = res;
+      const L0 = res.location;
+      if (res.ok && L0 && L0.latitude !== null) track.renderer.setVehicle(L0.latitude, L0.longitude);
+      render();
+    }
+
+    // res: { ok, status, message, location } from DW_API.getVehicleLocation
+    //   200 position known · 400 no GPS · 404 no position yet · 403 private (someone else's trip)
+    function render() {
+      const res = track.last;
+      if (!res) return;
+      const L0 = res.location || {};
+      const where = `${esc(L0.pickupAddress || loc.name)}${(L0.city || loc.city) ? ", " + esc(L0.city || loc.city) : ""}`;
+
+      if (res.status === 403) {
+        $("#trackInfo").innerHTML = `
+          <div class="track-status"><strong>On a trip</strong><span class="muted small">Location is private</span></div>
+          <p>${esc(res.message)} It's shown only to the customer on the trip and the owner.</p>
+          <dl class="track-stats"><div><dt>Pickup point</dt><dd>${where}</dd></div></dl>`;
+        return;
+      }
+      if (res.status === 400 || L0.gpsEnabled === false) {
+        $("#trackInfo").innerHTML = `
+          <div class="track-status"><strong>No GPS on this vehicle</strong><span class="muted small">Its location can't be tracked</span></div>
+          <p>It's kept at its pickup point: <strong>${where}</strong>. The map shows the pickup area.</p>`;
+        return;
+      }
+      if (!res.ok || L0.latitude === null || L0.latitude === undefined) {
+        $("#trackInfo").innerHTML = `
+          <div class="track-status"><strong>No position yet</strong></div>
+          <p>This vehicle hasn't reported a GPS position yet. The map shows its pickup area.</p>
+          <dl class="track-stats"><div><dt>Pickup point</dt><dd>${where}</dd></div></dl>`;
+        return;
+      }
+      const updated = DW_API.parseSqlDateTime(L0.lastUpdated);
+      const fresh = updated && Date.now() - updated < 10 * 60 * 1000;
+      const pos = { lat: L0.latitude, lng: L0.longitude };
+      $("#trackInfo").innerHTML = `
+        <div class="track-status ${fresh ? "is-live" : ""}">
+          ${fresh ? `<span class="pulse" aria-hidden="true"></span><strong>Live GPS position</strong>` : `<strong>Last known position</strong>`}
+          <span class="muted small">${updated ? `Updated ${timeAgo(updated)}` : "Time not recorded"}</span>
+        </div>
+        <dl class="track-stats">
+          <div><dt>Last updated</dt><dd>${updated ? fmtDateTime(updated) : "—"}</dd></div>
+          <div><dt>Coordinates</dt><dd>${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}</dd></div>
+          <div><dt>Pickup point</dt><dd>${where}</dd></div>
+        </dl>
+        <div class="track-actions">
+          <button class="btn btn-ghost" type="button" data-action="recenter">Centre on vehicle</button>
+          <a class="btn btn-ghost" href="https://www.google.com/maps?q=${pos.lat},${pos.lng}" target="_blank" rel="noopener">Open in Google Maps</a>
+        </div>`;
+    }
+
+    refresh();
+    track.timer = setInterval(refresh, LOCATION_REFRESH_MS);
+    track.ticker = setInterval(render, 30000); // keep "Updated x min ago" current
   }
 
   tracker.addEventListener("close", closeTracker);
@@ -1642,7 +1782,7 @@
   }
 
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-open],[data-save],[data-cancel],[data-trip],[data-track],[data-remove-address],[data-action],.tab");
+    const t = e.target.closest("[data-open],[data-save],[data-cancel],[data-trip],[data-track],[data-locate],[data-remove-address],[data-action],.tab");
     if (!t) return;
     const a = t.dataset.action;
     if (t.dataset.open) openVehicle(t.dataset.open);
@@ -1650,6 +1790,7 @@
     else if (t.dataset.cancel) askCancel(t.dataset.cancel);
     else if (t.dataset.trip) openTrip(t.dataset.trip);
     else if (t.dataset.track) openTracker(t.dataset.track);
+    else if (t.dataset.locate) openLocationView(vehicleOf(t.dataset.locate), null);
     else if (t.dataset.removeAddress) {
       store.customer.addresses = store.customer.addresses.filter((x) => x.id !== t.dataset.removeAddress);
       saveState(); renderProfile(); toast("Address removed");
@@ -1671,6 +1812,105 @@
   /* ==================================================================
      Start
   ================================================================== */
+  /* ==================================================================
+     Smart recommendations (live only)
+     GET /api/vehicles/recommendations scores every free vehicle:
+     city +25, budget +25, type +20, seats +15, fuel +10, well-rated owner +5
+  ================================================================== */
+  function setupRecs() {
+    const section = $("#recs");
+    if (!LIVE) { section.hidden = true; return; }
+    section.hidden = false;
+    const listed = DW_VEHICLES.filter((v) => v.listed !== false);
+    const fill = (sel, values) => values.forEach((x) => sel.insertAdjacentHTML("beforeend", `<option value="${esc(x)}">${esc(x)}</option>`));
+    const uniq = (xs) => [...new Set(xs.filter(Boolean))].sort();
+    fill($("#recCity"), uniq(DW_LOCATIONS.map((l) => l.city)));
+    fill($("#recCategory"), uniq(listed.map((v) => v.category)));
+    fill($("#recFuel"), uniq(listed.map((v) => v.fuel)));
+
+    $("#recsForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = e.target.elements;
+      const err = $("#recError");
+      // Parameter names of GET /api/vehicles/recommend
+      const prefs = {
+        city: f.city.value, category: f.category.value, fuelType: f.fuel.value,
+        minSeats: f.seats.value, maxPrice: f.budget.value.trim(), limit: 6
+      };
+      if (prefs.maxPrice && !(Number(prefs.maxPrice) > 0)) {
+        err.hidden = false; err.textContent = "Enter a budget per hour above ₹0, or leave it empty."; return;
+      }
+      if (!prefs.city && !prefs.category && !prefs.fuelType && !prefs.minSeats && !prefs.maxPrice) {
+        err.hidden = false; err.textContent = "Choose at least one preference so we know what to look for."; return;
+      }
+      err.hidden = true;
+      // Only vehicles free for the dates in the search box
+      if (!dateProblem(search.pickup, search.dropoff)) { prefs.start = search.pickup; prefs.end = search.dropoff; }
+      const btn = $("#recSubmit");
+      btn.disabled = true;
+      btn.textContent = "Finding matches…";
+      try {
+        const res = await DW_API.getRecommendations(prefs);
+        renderRecs(res);
+      } catch (ex) {
+        err.hidden = false;
+        err.textContent = `Couldn't get recommendations: ${ex.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Get recommendations";
+      }
+    });
+  }
+
+  function renderRecs(res) {
+    const box = $("#recResults");
+    const recs = res.recommendations || [];
+    const dates = res.filters && res.filters.start
+      ? ` free from ${fmtDateTime(search.pickup)} to ${fmtDateTime(search.dropoff)}` : "";
+    if (!recs.length) {
+      box.innerHTML = `<p class="rec-empty">No vehicles are free${dates}. Try other dates in the search box.</p>`;
+      return;
+    }
+    const best = recs[0].Score;
+    box.innerHTML = `
+      <p class="muted small">Ranked ${plural(res.considered, "vehicle")}${dates}. Best ${recs.length} shown.</p>
+      ${best === 0 ? `<p class="rec-empty">Nothing matched your preferences exactly. These are the closest available vehicles.</p>` : ""}
+      <ul class="rec-grid">${recs.map((r) => recCardHTML(r, res.maxScore)).join("")}</ul>`;
+  }
+
+  // r: one row from GET /api/vehicles/recommend (vehicle columns + Score, Matched, Missed)
+  function recCardHTML(r, maxScore) {
+    const v = vehicleOf("V" + r.Vehicle_ID) || {
+      id: "V" + r.Vehicle_ID, make: r.Brand, model: r.Model, type: "car", body: "sedan", color: "#5B3FD9", imageUrl: r.Vehicle_Image_URL
+    };
+    const pct = maxScore ? Math.round((r.Score / maxScore) * 100) : 0;
+    const rating = Number(r.Provider_Rating), reviews = Number(r.Provider_Review_Count);
+    return `
+      <li class="rec-card">
+        <div class="rec-photo">${photoHTML(v, 480)}</div>
+        <div class="rec-body">
+          <div class="rec-top">
+            <div>
+              <h3>${esc(r.Brand)} ${esc(r.Model)}</h3>
+              <div class="muted">${esc(r.Type_Name || "")} · ${r.Seating_Capacity} seats · ${esc(r.City || "")}</div>
+            </div>
+            <div class="rec-score" title="Score ${r.Score} out of ${maxScore}"><strong>${pct}%</strong><span>match</span></div>
+          </div>
+          <div class="rec-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
+          <ul class="rec-why">
+            ${(r.Matched || []).map((m) => `<li>${esc(m)}</li>`).join("")}
+            ${(r.Missed || []).map((m) => `<li class="miss">${esc(m)}</li>`).join("")}
+          </ul>
+          <div class="muted small">${esc(r.Provider_Name || "")}${reviews > 0
+            ? ` · <span class="star" aria-hidden="true">★</span> ${rating.toFixed(1)} (${plural(reviews, "review")})` : " · No reviews yet"}</div>
+          <div class="rec-foot">
+            <div><strong>${rupees(Number(r.Price_Per_Hour))}</strong> <span>per hour</span></div>
+            <button class="btn btn-go btn-sm" type="button" data-open="V${r.Vehicle_ID}">Book now</button>
+          </div>
+        </div>
+      </li>`;
+  }
+
   async function start() {
     const slow = showLoading();
     try {
@@ -1686,6 +1926,7 @@
       showBanner(`Showing demo data: ${liveProblem || "the DriveWise server couldn't be reached."} Bookings you make now are only saved in this browser.`, true, true);
     }
     setupBrowse();
+    setupRecs();
     setupProfile();
     renderAll();
     window.addEventListener("hashchange", route);
