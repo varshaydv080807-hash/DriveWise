@@ -2,6 +2,24 @@
 const pool = require("../config/db");
 const { nowLocalSql } = require("../utils/localTime");
 
+// Statuses a provider can set. Only "Available" vehicles can be booked or transferred.
+const VEHICLE_STATUSES = ["Available", "Unavailable", "Maintenance"];
+
+// GET VEHICLE TYPES (public; used by the provider's add-vehicle form)
+exports.getVehicleTypes = async (req, res) => {
+    try {
+        const [types] = await pool.execute(
+            `SELECT Type_ID, Type_Name, Vehicle_Category, Seating_Capacity, Fuel_Type
+             FROM vehicle_type
+             ORDER BY Vehicle_Category, Type_Name`
+        );
+        res.status(200).json({ success: true, types });
+    } catch (error) {
+        console.error("Get vehicle types error:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch vehicle types" });
+    }
+};
+
 // ADD VEHICLE
 
 exports.addVehicle = async (req, res) => {
@@ -56,6 +74,26 @@ exports.addVehicle = async (req, res) => {
 
         const ownProviderId = providerRows[0].Provider_ID;
 
+        const price = Number(pricePerHour);
+        if (!Number.isFinite(price) || price <= 0) {
+            return res.status(400).json({ message: "Price per hour must be a number above 0" });
+        }
+        if (!VEHICLE_STATUSES.includes(status)) {
+            return res.status(400).json({ message: `Status must be one of: ${VEHICLE_STATUSES.join(", ")}` });
+        }
+
+        // A provider can only place a vehicle in one of their own branches
+        for (const branchId of [homeBranchId, currentBranchId]) {
+            if (!branchId) continue;
+            const [branchRows] = await pool.execute(
+                `SELECT Branch_ID FROM branch WHERE Branch_ID = ? AND Provider_ID = ?`,
+                [branchId, ownProviderId]
+            );
+            if (branchRows.length === 0) {
+                return res.status(403).json({ message: "You can only add vehicles to your own branches" });
+            }
+        }
+
         const sql = `
             INSERT INTO vehicle (
                 Provider_ID,
@@ -108,6 +146,13 @@ exports.addVehicle = async (req, res) => {
 
     } catch (error) {
         console.error("Add vehicle error:", error);
+
+        if (error.code === "ER_DUP_ENTRY") {
+            return res.status(409).json({ message: "A vehicle with this registration number already exists" });
+        }
+        if (error.code === "ER_NO_REFERENCED_ROW_2") {
+            return res.status(400).json({ message: "Unknown vehicle type or branch" });
+        }
 
         res.status(500).json({
             message: "Failed to add vehicle"
@@ -714,6 +759,17 @@ exports.updateVehicle = async (req, res) => {
             city
         } = req.body;
 
+        const price = Number(pricePerHour);
+        if (!Number.isFinite(price) || price <= 0) {
+            return res.status(400).json({ message: "Price per hour must be a number above 0" });
+        }
+        if (!VEHICLE_STATUSES.includes(status)) {
+            return res.status(400).json({ message: `Status must be one of: ${VEHICLE_STATUSES.join(", ")}` });
+        }
+        if (![0, 1, true, false, "0", "1"].includes(gpsEnabled)) {
+            return res.status(400).json({ message: "GPS status must be on or off" });
+        }
+
         const sql = `
             UPDATE vehicle
             SET
@@ -729,14 +785,14 @@ exports.updateVehicle = async (req, res) => {
         `;
 
         const values = [
-            brand,
-            model,
-            manufactureYear,
-            pricePerHour,
+            brand || null,
+            model || null,
+            manufactureYear || null,
+            price,
             status,
-            gpsEnabled,
-            pickupAddress,
-            city,
+            Number(gpsEnabled) === 1 ? 1 : 0,
+            pickupAddress || null,
+            city || null,
             id
         ];
 

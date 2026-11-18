@@ -65,7 +65,9 @@
                                 <h2>My Vehicles</h2>
                                 <p>Where each vehicle is and whether it reports its GPS position.</p>
                             </div>
+                            <button class="add-vehicle-btn" type="button" id="addVehicleBtn">+ Add vehicle</button>
                         </div>
+                        <p class="form-msg" id="vehicleMsg" role="status"></p>
                         <div class="table-wrapper">
                             <table>
                                 <thead>
@@ -78,6 +80,7 @@
                                         <th>GPS</th>
                                         <th>Price / Hour</th>
                                         <th>Listing</th>
+                                        <th><span class="sr-only">Actions</span></th>
                                     </tr>
                                 </thead>
                                 <tbody id="vehicleRows"></tbody>
@@ -185,6 +188,68 @@
             </section>
         </main>
     </div>
+
+    <!-- Add / edit vehicle: POST /api/vehicles/add, PUT /api/vehicles/:id -->
+    <dialog class="transfer-dialog vehicle-dialog" id="vehicleDialog" aria-labelledby="vehicleDialogTitle">
+        <form class="transfer-form vehicle-form" id="vehicleForm" novalidate>
+            <h2 id="vehicleDialogTitle">Add a vehicle</h2>
+            <p class="note" id="vehicleDialogNote">New vehicles are checked by the DriveWise team before customers can book them.</p>
+            <div class="vehicle-form-grid">
+                <div class="form-field">
+                    <label for="vfBrand">Brand</label>
+                    <input id="vfBrand" name="brand" maxlength="100" required placeholder="Hyundai">
+                </div>
+                <div class="form-field">
+                    <label for="vfModel">Model</label>
+                    <input id="vfModel" name="model" maxlength="100" required placeholder="i20">
+                </div>
+                <div class="form-field" data-add-only>
+                    <label for="vfType">Vehicle type</label>
+                    <select id="vfType" name="typeId" required></select>
+                </div>
+                <div class="form-field" data-add-only>
+                    <label for="vfReg">Registration number</label>
+                    <input id="vfReg" name="registrationNo" maxlength="50" required placeholder="DL01AB1234" autocapitalize="characters">
+                </div>
+                <div class="form-field">
+                    <label for="vfYear">Manufacture year</label>
+                    <input id="vfYear" name="manufactureYear" type="number" inputmode="numeric" min="1990" step="1">
+                </div>
+                <div class="form-field">
+                    <label for="vfPrice">Price per hour (₹)</label>
+                    <input id="vfPrice" name="pricePerHour" type="number" inputmode="decimal" min="1" step="any" required>
+                </div>
+                <div class="form-field" data-add-only>
+                    <label for="vfBranch">Branch</label>
+                    <select id="vfBranch" name="branchId"></select>
+                </div>
+                <div class="form-field">
+                    <label for="vfStatus">Status</label>
+                    <select id="vfStatus" name="status">
+                        <option value="Available">Available</option>
+                        <option value="Unavailable">Unavailable</option>
+                        <option value="Maintenance">Maintenance</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="vfCity">City</label>
+                    <input id="vfCity" name="city" maxlength="100" placeholder="New Delhi">
+                </div>
+                <div class="form-field">
+                    <label for="vfAddress">Pickup address</label>
+                    <input id="vfAddress" name="pickupAddress" maxlength="255" placeholder="Connaught Place">
+                </div>
+                <label class="vehicle-form-check">
+                    <input id="vfGps" name="gpsEnabled" type="checkbox"> This vehicle has GPS
+                </label>
+            </div>
+            <p class="form-msg err" id="vehicleFormErr" role="alert"></p>
+            <div class="form-actions">
+                <button class="action-btn" type="button" id="vehicleCancel">Cancel</button>
+                <button class="add-vehicle-btn" type="submit" id="vehicleSave">Add vehicle</button>
+            </div>
+        </form>
+    </dialog>
 
     <script src="vendor/leaflet/leaflet.js"></script>
     <script src="config.js"></script>

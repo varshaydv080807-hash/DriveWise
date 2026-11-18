@@ -1,7 +1,8 @@
 // DriveWise provider dashboard
 // Uses: GET /api/providers/me, GET /api/vehicles, GET /api/branches?providerId=,
 //       POST /api/vehicles/:id/transfer, GET|PUT /api/vehicles/:id/location,
-//       GET /api/providers/me/analytics
+//       GET /api/providers/me/analytics,
+//       GET /api/vehicles/types, POST /api/vehicles/add, PUT /api/vehicles/:id
 (function () {
   "use strict";
 
@@ -63,6 +64,7 @@
     $("#providerWelcome").textContent = `Welcome back, ${String(p.Name || p.Display_Name).split(" ")[0]}!`;
 
     renderVehicles();
+    setupVehicleForm();
     setupTransfer();
     setupGps();
     loadAnalytics();
@@ -90,7 +92,7 @@
   function renderVehicles() {
     const rows = $("#vehicleRows");
     if (!state.vehicles.length) {
-      rows.innerHTML = `<tr><td colspan="8" class="live-loading">You haven't listed any vehicles yet.</td></tr>`;
+      rows.innerHTML = `<tr><td colspan="9" class="live-loading">You haven't listed any vehicles yet. Use “Add vehicle” to list your first one.</td></tr>`;
       return;
     }
     rows.innerHTML = state.vehicles.map((v) => {
@@ -104,7 +106,8 @@
         <td>${esc(branchName(v.Home_Branch_ID))}</td>
         <td>${gps ? `<span class="gps-badge">On · ${esc(fmtDateTime(v.Location_Updated_At))}</span>` : `<span class="gps-badge off">Off</span>`}</td>
         <td>${rupees(v.Price_Per_Hour)}</td>
-        <td><span class="status ${ver === "Verified" ? "confirmed" : ver === "Rejected" ? "cancelled" : "pending"}">${esc(ver === "Pending" ? "Awaiting review" : ver)}</span></td>
+        <td><span class="status ${ver === "Verified" ? "confirmed" : ver === "Rejected" ? "cancelled" : "pending"}">${esc(ver === "Pending" ? "Awaiting review" : ver)}</span>${v.Status && v.Status !== "Available" ? `<br><small class="muted-cell">${esc(v.Status)}</small>` : ""}</td>
+        <td><button type="button" class="action-btn" data-edit-vehicle="${v.Vehicle_ID}" aria-label="Edit ${esc(vName(v))}">Edit</button></td>
       </tr>`;
     }).join("");
 
@@ -130,6 +133,152 @@
     };
     setCard("#statEarned", rupees(s.Payouts_Earned), `${rupees(s.Completed_Payout)} paid, ${rupees(s.Pending_Payout)} pending`);
     setCard("#statNet", rupees(s.Net_Earnings), `After ${rupees(s.Maintenance_Expense)} of maintenance`, Number(s.Net_Earnings) < 0);
+  }
+
+  /* ---------------- Add / edit vehicle ---------------- */
+  // After a save the page reloads, so every section (transfer, GPS, analytics)
+  // picks up the change. The message is carried over in sessionStorage.
+  const FLASH_KEY = "dw_provider_flash";
+
+  function showFlash() {
+    let text = null;
+    try { text = sessionStorage.getItem(FLASH_KEY); sessionStorage.removeItem(FLASH_KEY); } catch (e) { /* storage blocked */ }
+    if (!text) return;
+    const msg = $("#vehicleMsg");
+    msg.className = "form-msg ok";
+    msg.textContent = text;
+  }
+
+  function setupVehicleForm() {
+    const dialog = $("#vehicleDialog"), form = $("#vehicleForm"), err = $("#vehicleFormErr");
+    const f = (name) => form.elements[name];
+    let editing = null;     // vehicle being edited, or null when adding
+    let typesLoaded = false;
+
+    showFlash();
+
+    async function loadTypes() {
+      if (typesLoaded) return;
+      const { types } = await DW_API.getVehicleTypes();
+      f("typeId").innerHTML = `<option value="">Choose a type</option>` + types.map((t) => {
+        const extra = [t.Seating_Capacity ? `${t.Seating_Capacity} seats` : "", t.Fuel_Type || ""].filter(Boolean).join(", ");
+        return `<option value="${t.Type_ID}">${esc(t.Type_Name)} · ${esc(t.Vehicle_Category)}${extra ? ` (${esc(extra)})` : ""}</option>`;
+      }).join("");
+      typesLoaded = true;
+    }
+
+    function fillBranches() {
+      f("branchId").innerHTML = state.branches.map((b) =>
+        `<option value="${b.Branch_ID}">${esc(b.Branch_Name)}, ${esc(b.City)}</option>`).join("") +
+        `<option value="">No branch (I'll give a pickup address)</option>`;
+      useBranchAddress();
+    }
+
+    // Picking a branch fills in its city and address as the pickup point
+    function useBranchAddress() {
+      const b = branchById(f("branchId").value);
+      if (b) { f("city").value = b.City || ""; f("pickupAddress").value = b.Address || ""; }
+    }
+    f("branchId").addEventListener("change", useBranchAddress);
+
+    async function open(vehicle) {
+      editing = vehicle || null;
+      form.reset();
+      err.textContent = "";
+      form.querySelectorAll("[data-add-only]").forEach((el) => { el.hidden = Boolean(editing); });
+      $("#vehicleSave").disabled = false;
+      if (editing) {
+        $("#vehicleDialogTitle").textContent = `Edit ${vName(editing)}`;
+        $("#vehicleDialogNote").textContent = `${editing.Registration_No || ""} · to move it to another branch, use Branch Transfer below.`;
+        $("#vehicleSave").textContent = "Save changes";
+        f("brand").value = editing.Brand || "";
+        f("model").value = editing.Model || "";
+        f("manufactureYear").value = editing.Manufacture_Year || "";
+        f("pricePerHour").value = Number(editing.Price_Per_Hour) || "";
+        f("status").value = ["Available", "Unavailable", "Maintenance"].includes(editing.Status) ? editing.Status : "Available";
+        f("city").value = editing.City || "";
+        f("pickupAddress").value = editing.Pickup_Address || "";
+        f("gpsEnabled").checked = Number(editing.GPS_Enabled) === 1;
+      } else {
+        $("#vehicleDialogTitle").textContent = "Add a vehicle";
+        $("#vehicleDialogNote").textContent = "New vehicles are checked by the DriveWise team before customers can book them.";
+        $("#vehicleSave").textContent = "Add vehicle";
+        fillBranches();
+        try {
+          await loadTypes();
+        } catch (e) {
+          err.textContent = `Couldn't load vehicle types: ${e.message}`;
+          $("#vehicleSave").disabled = true;
+        }
+      }
+      f("manufactureYear").max = new Date().getFullYear() + 1;
+      if (!dialog.open) dialog.showModal();
+      f("brand").focus();
+    }
+
+    function readForm() {
+      const year = f("manufactureYear").value.trim();
+      const body = {
+        brand: f("brand").value.trim(),
+        model: f("model").value.trim(),
+        manufactureYear: year === "" ? null : Number(year),
+        pricePerHour: Number(f("pricePerHour").value),
+        status: f("status").value,
+        gpsEnabled: f("gpsEnabled").checked ? 1 : 0,
+        city: f("city").value.trim(),
+        pickupAddress: f("pickupAddress").value.trim()
+      };
+      let problem = "";
+      if (!body.brand || !body.model) problem = "Enter the brand and model.";
+      else if (body.manufactureYear !== null && (!Number.isInteger(body.manufactureYear) || body.manufactureYear < 1990 || body.manufactureYear > new Date().getFullYear() + 1)) problem = "Enter a valid manufacture year.";
+      else if (!(body.pricePerHour > 0)) problem = "Enter a price per hour above ₹0.";
+      if (!editing && !problem) {
+        body.typeId = Number(f("typeId").value);
+        body.registrationNo = f("registrationNo").value.trim().toUpperCase().replace(/\s+/g, "");
+        const branchId = Number(f("branchId").value) || null;
+        body.homeBranchId = branchId;
+        body.currentBranchId = branchId;
+        if (!body.typeId) problem = "Choose a vehicle type.";
+        else if (!body.registrationNo) problem = "Enter the registration number.";
+        else if (!branchId && (!body.city || !body.pickupAddress)) problem = "Without a branch, enter the city and pickup address.";
+      }
+      return { body, problem };
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const { body, problem } = readForm();
+      err.textContent = problem;
+      if (problem) return;
+      const btn = $("#vehicleSave");
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Saving…";
+      try {
+        let flash;
+        if (editing) {
+          await DW_API.updateVehicle(editing.Vehicle_ID, body);
+          flash = `${body.brand} ${body.model} was updated.`;
+        } else {
+          await DW_API.addVehicle(body);
+          flash = `${body.brand} ${body.model} was added. It shows as “Awaiting review” until the DriveWise team approves it.`;
+        }
+        try { sessionStorage.setItem(FLASH_KEY, flash); } catch (e2) { /* storage blocked */ }
+        location.hash = "vehicles";
+        location.reload();
+      } catch (ex) {
+        err.textContent = ex.status === 401 ? "Your session has ended. Log in again and retry." : ex.message;
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    });
+
+    $("#vehicleCancel").addEventListener("click", () => dialog.close());
+    $("#addVehicleBtn").addEventListener("click", () => open(null));
+    $("#vehicleRows").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-edit-vehicle]");
+      if (btn) open(vehicleById(btn.dataset.editVehicle));
+    });
   }
 
   /* ---------------- Branch transfer ---------------- */

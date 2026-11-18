@@ -24,6 +24,9 @@ router.get(
     vehicleController.getRecommendedVehicles
 );
 
+// Vehicle types for the add-vehicle form (public)
+router.get("/types", vehicleController.getVehicleTypes);
+
 // Get booked slots
 router.get("/booked-slots", vehicleController.getBookedSlots);
 
